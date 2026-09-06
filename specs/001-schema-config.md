@@ -1,6 +1,6 @@
 # SPEC-001: Schema configuration
 
-Status: **Approved** · Task: T2 · Crates: `pressa-core`, `pressa-app`
+Status: **Draft** · Task: T2 · Crates: `pressa-core`, `pressa-app`
 · ADRs: [0003](../docs/adr/0003-json-documents-not-eav.md), [0004](../docs/adr/0004-schema-driven-ui.md)
 
 ## Problem

@@ -1,6 +1,6 @@
 # SPEC-000: M0 Golden Path
 
-Status: **Approved** · Milestone: M0 · Owner: coordinator
+Status: **Draft** · Milestone: M0 · Owner: coordinator
 
 ## Problem
 
