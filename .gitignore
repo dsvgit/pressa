@@ -12,3 +12,6 @@ Cargo.lock.orig
 **/*.snap.new
 
 .DS_Store
+
+# Personal Claude Code overrides (project settings.json IS committed)
+.claude/settings.local.json
