@@ -1,0 +1,17 @@
+[workspace]
+resolver = "3"
+members = ["pressa-core", "pressa-storage", "pressa-app", "pressa-tui"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[workspace.dependencies]
+pressa-core = { path = "pressa-core" }
+pressa-storage = { path = "pressa-storage" }
+pressa-app = { path = "pressa-app" }
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std"] }
