@@ -205,10 +205,10 @@ message rather than a broken layout.
 ```
 ┌ pressa › Posts ───────────────────────────────────────────── 2 records ───┐
 ├──────────────┬────────────────────────────────────────────────────────────┤
-│ Collections  │  TITLE            STATUS      VIEWS   UPDATED               │
+│ Collections  │  TITLE            STATUS      VIEWS                         │
 │              │ ─────────────────────────────────────────────────────────  │
-│ > Posts      │ ▸Hello world      draft           0   2m ago                │
-│   Authors    │  About page       published      42   yesterday             │
+│ > Posts      │ ▸Hello world      draft           0                         │
+│   Authors    │  About page       published      42                         │
 │   Categories │                                                            │
 │              │                                                            │
 ├──────────────┴────────────────────────────────────────────────────────────┤
@@ -218,7 +218,8 @@ message rather than a broken layout.
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
-Columns come from `list_columns`. Column widths are proportional to content
+Columns come from `list_columns` — exactly those fields, in that order, with
+no implicit extra column appended. Column widths are proportional to content
 with a minimum of 6 and an ellipsis on overflow. Boolean renders as `✓` / `·`,
 `Json` renders as `{…}` with the key count, `Null` renders as a dim `—`.
 

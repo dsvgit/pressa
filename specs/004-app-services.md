@@ -69,10 +69,16 @@ is `UnknownCollection` and never reaches the repository.
 3. if any uniqueness errors accumulated, return `Validation` with them;
 4. otherwise call the repository.
 
-`blank` returns an object with every field key present: `false` for `Boolean`,
-the first option for a required `Select`, and `null` otherwise. A new record
-form therefore starts from a document that has the right shape, so the editor
-never has to invent one.
+`blank` returns an object with every field key present: `false` for `Boolean`
+and `null` for everything else — **including a required `Select`**, which is
+left empty on purpose. A new record form therefore starts from a document that
+has the right shape, so the editor never has to invent one.
+
+Seeding a required `Select` with its first option was the earlier rule and was
+reversed: pre-filling a required field with a value the user never chose is how
+a database quietly fills up with records marked `draft`, and it would make the
+blank form pass validation for a field the user has not answered. See
+[000](000-m0-golden-path.md) step 6.
 
 ## Invariants
 
@@ -95,8 +101,10 @@ never has to invent one.
 - [ ] `update` of a missing id returns `NotFound`.
 - [ ] Any method with an unknown collection returns `UnknownCollection` without
       calling the repository.
-- [ ] `blank` returns every field key, with `false` for booleans and the first
-      option for required selects.
+- [ ] `blank` returns every field key, with `false` for booleans and `null` for
+      every other type, required selects included.
+- [ ] A record built only from `blank` fails validation with one `Required` per
+      required field, the required `Select` among them.
 - [ ] `delete` removes the record; a second `delete` returns `NotFound`.
 - [ ] Integration test: load schema → create → list → get → update → delete,
       against `SqliteRepository` on a temp file.

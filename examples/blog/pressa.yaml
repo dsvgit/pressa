@@ -50,22 +50,3 @@ collections:
       - name: metadata
         label: Metadata
         type: json
-
-  authors:
-    label: Authors
-    list_columns: [name, email]
-    fields:
-      - name: name
-        label: Name
-        type: text
-        required: true
-
-      - name: email
-        label: Email
-        type: text
-        required: true
-        unique: true
-
-      - name: bio
-        label: Bio
-        type: textarea
