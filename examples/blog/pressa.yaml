@@ -1,0 +1,71 @@
+# The example project used by `just run` and by the M0 Golden Path
+# (specs/000-m0-golden-path.md). Keep these in sync.
+
+project:
+  name: blog-cms
+
+database:
+  path: .pressa/data.db
+
+collections:
+  posts:
+    label: Posts
+    list_columns: [title, status, views]
+    fields:
+      - name: title
+        label: Title
+        type: text
+        required: true
+
+      - name: slug
+        label: Slug
+        type: text
+        required: true
+        unique: true
+
+      - name: status
+        label: Status
+        type: select
+        required: true
+        options:
+          - draft
+          - published
+
+      - name: content
+        label: Content
+        type: textarea
+
+      - name: views
+        label: Views
+        type: number
+
+      - name: featured
+        label: Featured
+        type: boolean
+
+      - name: published_at
+        label: Published at
+        type: datetime
+
+      - name: metadata
+        label: Metadata
+        type: json
+
+  authors:
+    label: Authors
+    list_columns: [name, email]
+    fields:
+      - name: name
+        label: Name
+        type: text
+        required: true
+
+      - name: email
+        label: Email
+        type: text
+        required: true
+        unique: true
+
+      - name: bio
+        label: Bio
+        type: textarea

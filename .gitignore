@@ -1,0 +1,14 @@
+/target
+**/*.rs.bk
+Cargo.lock.orig
+
+# Pressa project data
+.pressa/
+*.db
+*.db-wal
+*.db-shm
+
+# insta
+**/*.snap.new
+
+.DS_Store
