@@ -6,6 +6,10 @@ default:
 fmt:
     cargo fmt --all
 
+# Enable the repo's git hooks (pre-commit formats staged Rust files).
+hooks:
+    git config core.hooksPath .githooks
+
 lint:
     cargo clippy --workspace --all-targets -- -D warnings
 
