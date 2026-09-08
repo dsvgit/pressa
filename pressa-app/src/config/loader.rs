@@ -5,6 +5,7 @@
 //! domain types, so every rejection can carry the YAML path that caused it
 //! rather than serde's own wording.
 
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -14,6 +15,7 @@ use pressa_core::schema::{
     ProjectConfig, Schema, is_identifier,
 };
 use serde::Deserialize;
+use serde::de::{Deserializer, MapAccess, Visitor};
 
 use super::ConfigError;
 
@@ -34,7 +36,44 @@ struct RawSchema {
     database: RawDatabase,
     // Absent `collections` must produce our own message, not serde's.
     #[serde(default)]
-    collections: IndexMap<String, RawCollection>,
+    collections: RawCollections,
+}
+
+/// The collections exactly as written, duplicates included.
+///
+/// Deserializing straight into an `IndexMap` would keep the last block for a
+/// repeated slug and drop the earlier one silently — a whole collection
+/// vanishing with no diagnostic. Pass 1 stays faithful to the file; deciding
+/// that a repeat is an error is pass 2's job.
+#[derive(Debug, Default)]
+struct RawCollections(Vec<(String, RawCollection)>);
+
+impl<'de> Deserialize<'de> for RawCollections {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // A unit struct standing in for the visitor; it carries no state.
+        struct CollectionsVisitor;
+
+        impl<'de> Visitor<'de> for CollectionsVisitor {
+            type Value = RawCollections;
+
+            // Used by serde to word the error when the YAML is not a mapping.
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a mapping of collection slugs to collections")
+            }
+
+            fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<Self::Value, M::Error> {
+                let mut entries = Vec::new();
+                // `next_entry` hands over every pair the parser saw, repeats
+                // included, so nothing is lost before validation looks at it.
+                while let Some(entry) = map.next_entry::<String, RawCollection>()? {
+                    entries.push(entry);
+                }
+                Ok(RawCollections(entries))
+            }
+        }
+
+        deserializer.deserialize_map(CollectionsVisitor)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -89,18 +128,25 @@ pub fn load_schema(path: &Path) -> Result<Schema, ConfigError> {
 }
 
 fn validate(raw: RawSchema) -> Result<Schema, ConfigError> {
-    if raw.collections.is_empty() {
+    if raw.collections.0.is_empty() {
         return Err(ConfigError::invalid(
             "collections",
             "at least one collection is required",
         ));
     }
 
-    let mut collections = IndexMap::with_capacity(raw.collections.len());
-    // `into_iter` consumes the map, so slugs and fields move into the domain
-    // types instead of being cloned. Order is IndexMap's insertion order,
-    // which is the order they appear in the file.
-    for (slug, raw_collection) in raw.collections {
+    let mut collections = IndexMap::with_capacity(raw.collections.0.len());
+    // Consuming the Vec moves slugs and fields into the domain types instead
+    // of cloning them, and keeps the order they appear in the file.
+    for (slug, raw_collection) in raw.collections.0 {
+        // Checked before validating the block so the repeat is reported even
+        // when the second block also has something else wrong with it.
+        if collections.contains_key(&slug) {
+            return Err(ConfigError::invalid(
+                format!("collections.{slug}"),
+                format!("duplicate collection slug '{slug}'"),
+            ));
+        }
         let collection = validate_collection(&slug, raw_collection)?;
         collections.insert(slug, collection);
     }

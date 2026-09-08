@@ -424,6 +424,63 @@ collections:
 }
 
 #[test]
+fn a_duplicate_collection_slug_is_rejected() {
+    // A renamed collection whose old block was left behind: the map would keep
+    // the last one and drop the first without a word, which is exactly the
+    // far-from-the-cause failure this loader exists to prevent.
+    let error = load_err(
+        "\
+project:
+  name: x
+collections:
+  posts:
+    label: First
+    fields:
+      - name: title
+        type: text
+  posts:
+    label: Second
+    fields:
+      - name: body
+        type: textarea
+",
+    );
+
+    assert!(matches!(error, ConfigError::Invalid { .. }), "{error:?}");
+    assert_eq!(
+        error.to_string(),
+        "collections.posts: duplicate collection slug 'posts'"
+    );
+}
+
+#[test]
+fn distinct_collection_slugs_are_all_kept() {
+    // Guards the duplicate check against rejecting honest schemas.
+    let schema = load_ok(
+        "\
+project:
+  name: x
+collections:
+  posts:
+    fields:
+      - name: title
+        type: text
+  authors:
+    fields:
+      - name: name
+        type: text
+  tags:
+    fields:
+      - name: name
+        type: text
+",
+    );
+
+    let order: Vec<&str> = schema.collections.keys().map(String::as_str).collect();
+    assert_eq!(order, ["posts", "authors", "tags"]);
+}
+
+#[test]
 fn malformed_yaml_reports_the_line_and_column() {
     let error = load_err(
         "\
