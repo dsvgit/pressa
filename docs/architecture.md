@@ -47,8 +47,8 @@ human doesn't have to.** See [ADR-0006](adr/0006-workspace-of-four-crates.md).
 |---|---|---|---|
 | `pressa-core` | `Schema`, `Collection`, `Field`, `FieldType`, `Value`, `Record`, validation, `RecordRepository` trait, domain errors | `serde`, `serde_json`, `thiserror`, `chrono`, `ulid`, `indexmap` | ratatui, crossterm, rusqlite, clap, tokio |
 | `pressa-storage` | `SqliteRepository`, `MemoryRepository`, migration runner, `StorageError` | `pressa-core`, `rusqlite` | ratatui, crossterm, clap |
-| `pressa-app` | `RecordService`, `CollectionService`, config loading, `AppError` | `pressa-core`, `serde_yaml` | ratatui, crossterm, rusqlite |
-| `pressa-tui` | binary `pressa`: clap CLI, terminal lifecycle, `AppState`, `Command`, keymap, screens, widgets, tracing setup | `pressa-app`, `pressa-storage` (wiring only, in `main.rs`), `ratatui`, `crossterm`, `clap` | — |
+| `pressa-app` | `RecordService`, `CollectionService`, config loading, `AppError` | `pressa-core`, `serde_yaml` | ratatui, crossterm, rusqlite, pressa-storage |
+| `pressa-tui` | binary `pressa`: clap CLI, terminal lifecycle, `AppState`, `Command`, keymap, screens, widgets, tracing setup | `pressa-app`, `pressa-storage` (wiring only, in `main.rs`), `ratatui`, `crossterm`, `clap`, `thiserror`, `tracing`, `tracing-subscriber` | — |
 
 `pressa-tui` is allowed to name `pressa-storage` in exactly one place: the
 composition root in `main.rs`, where a `SqliteRepository` is constructed and
@@ -141,3 +141,4 @@ sit.
 - [ADR-0005](adr/0005-command-and-keymap-architecture.md) — command/keymap layer
 - [ADR-0006](adr/0006-workspace-of-four-crates.md) — workspace of four crates
 - [ADR-0007](adr/0007-vertical-slice-first.md) — vertical slice before breadth
+- [ADR-0008](adr/0008-tracing-to-a-log-file.md) — diagnostics to `.pressa/pressa.log`

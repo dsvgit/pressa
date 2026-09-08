@@ -44,6 +44,11 @@ pressa-tui → pressa-app → pressa-core ← pressa-storage
   to `.pressa/pressa.log`.
 - Prefer small modules and explicit types over clever generics.
 - New behaviour ships with tests. UI work ships with `insta` snapshots.
+- Comment for a reader who is new to Rust: a short single-line `//` comment on
+  every non-obvious line — borrows, lifetimes, `?`, iterators, closures, trait
+  bounds, `match` arms that are not self-evident. English, one line, no comment
+  blocks. Say what the line does and why, never restate the syntax
+  (`// take a shared borrow so the row is not moved`, not `// call iter()`).
 
 ## The stop rule
 

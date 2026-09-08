@@ -121,7 +121,16 @@ just test     cargo test --workspace
 just ci       fmt --check + lint + test
 just snap     cargo insta review
 just run      cargo run -p pressa-tui -- dev --project examples/blog
+just hooks    git config core.hooksPath .githooks
 ```
+
+Run `just hooks` once per clone. It points git at [`.githooks/`](../.githooks),
+whose `pre-commit` runs `rustfmt` over the staged `.rs` files and re-stages
+them, so a commit is formatted by construction rather than by remembering. A
+file that is only partially staged is not touched — the hook reports it and
+aborts instead of quietly staging the rest of your working copy. `git commit
+--no-verify` skips the hook. It is not a substitute for `just ci`: it does not
+lint or test.
 
 `just ci` must pass before any task is considered finished. CI runs the same
 three commands, so a green local run means a green pipeline.

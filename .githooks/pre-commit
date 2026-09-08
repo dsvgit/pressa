@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Pre-commit: rustfmt only the staged Rust files, then re-stage them.
+#
+# Installed by `just hooks` (sets core.hooksPath to .githooks).
+# Skip once with `git commit --no-verify`.
+
+set -uo pipefail
+
+command -v rustfmt >/dev/null 2>&1 || exit 0
+
+edition=$(sed -n 's/^edition[[:space:]]*=[[:space:]]*"\([0-9]*\)".*/\1/p' Cargo.toml | head -1)
+edition=${edition:-2024}
+
+# Staged Rust files, NUL-separated so paths with spaces survive.
+staged=()
+while IFS= read -r -d '' file; do
+    staged+=("$file")
+done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.rs')
+[ ${#staged[@]} -eq 0 ] && exit 0
+
+clean=()   # staged content == worktree content: safe to format and re-stage
+partial=() # has unstaged changes too: formatting it would stage them
+for file in "${staged[@]}"; do
+    [ -f "$file" ] || continue
+    if git diff --quiet -- "$file"; then
+        clean+=("$file")
+    else
+        partial+=("$file")
+    fi
+done
+
+if [ ${#clean[@]} -gt 0 ]; then
+    if ! rustfmt --edition "$edition" -- "${clean[@]}"; then
+        echo "pre-commit: rustfmt failed — commit aborted." >&2
+        exit 1
+    fi
+    for file in "${clean[@]}"; do
+        git diff --quiet -- "$file" || { git add -- "$file"; echo "pre-commit: formatted $file"; }
+    done
+fi
+
+# Partially staged files are left alone: report them instead of silently
+# committing unformatted code.
+unformatted=()
+for file in ${partial[@]+"${partial[@]}"}; do
+    rustfmt --edition "$edition" --check -- "$file" >/dev/null 2>&1 || unformatted+=("$file")
+done
+
+if [ ${#unformatted[@]} -gt 0 ]; then
+    echo "pre-commit: these files are not formatted and have unstaged changes," >&2
+    echo "so the hook cannot format them safely:" >&2
+    printf '  %s\n' "${unformatted[@]}" >&2
+    echo "Run \`just fmt\`, stage the result, and commit again." >&2
+    exit 1
+fi
+
+exit 0
