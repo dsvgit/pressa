@@ -7,3 +7,7 @@ publish.workspace = true
 
 [dependencies]
 indexmap.workspace = true
+# Records are stored as JSON documents — ADR-0003.
+serde_json.workspace = true
+# `DateTime` fields are RFC 3339 strings and must be parsed to be validated.
+chrono.workspace = true

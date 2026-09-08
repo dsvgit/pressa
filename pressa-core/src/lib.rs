@@ -2,3 +2,4 @@
 //! port. Knows nothing of ratatui, rusqlite or clap.
 
 pub mod schema;
+pub mod validation;
