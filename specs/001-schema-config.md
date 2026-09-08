@@ -1,6 +1,6 @@
 # SPEC-001: Schema configuration
 
-Status: **Draft** · Task: T2 · Crates: `pressa-core`, `pressa-app`
+Status: **Implemented** · Task: T2 · Crates: `pressa-core`, `pressa-app`
 · ADRs: [0003](../docs/adr/0003-json-documents-not-eav.md), [0004](../docs/adr/0004-schema-driven-ui.md)
 
 ## Problem
@@ -59,6 +59,8 @@ Accepted `type` values: `text`, `textarea`, `number`, `boolean`, `datetime`,
 ```rust
 // pressa-app
 pub fn discover_project(start: &Path) -> Result<ProjectPaths, ConfigError>;
+/// `--project <dir>`: the schema must be in this directory. No walking up.
+pub fn project_at(dir: &Path) -> Result<ProjectPaths, ConfigError>;
 pub fn load_schema(path: &Path) -> Result<Schema, ConfigError>;
 
 pub struct ProjectPaths {
@@ -96,11 +98,23 @@ Every error carries a YAML path. Message shape: `<path>: <problem>`.
 | Duplicate field name | `collections.posts.fields[4].name: duplicate field name 'title'` |
 | `list_columns: [titel]` | `collections.posts.list_columns[0]: unknown field 'titel'` |
 | `select` without options | `collections.posts.fields[2].options: required for type 'select'` |
+| `select` with `options: []` | `collections.posts.fields[2].options: at least one option is required` |
+| Duplicate `select` option | `collections.posts.fields[2].options[2]: duplicate option 'draft'` |
+| Duplicate collection slug | `collections.posts: duplicate collection slug 'posts'` |
 | Slug `Posts` or `my-posts` | `collections.Posts: must match ^[a-z][a-z0-9_]*$` |
 
 `relation` gets a dedicated mention in the "expected one of" list because it is
 the type users will most plausibly try; the message must not imply it is coming
 in this version.
+
+A missing `options` key and an empty `options: []` are different mistakes and
+get different messages: the first forgot the key, the second wrote a `select`
+with nothing to select.
+
+A duplicate collection slug is a rejection rather than a last-one-wins merge.
+YAML mappings deduplicate silently, so the parse keeps every block as written
+and the duplicate is caught in validation — a collection disappearing without a
+diagnostic is the failure this spec's Problem statement is about.
 
 ## Acceptance criteria
 

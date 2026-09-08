@@ -12,6 +12,9 @@ publish = false
 pressa-core = { path = "pressa-core" }
 pressa-storage = { path = "pressa-storage" }
 pressa-app = { path = "pressa-app" }
+indexmap = { version = "2", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std"] }
