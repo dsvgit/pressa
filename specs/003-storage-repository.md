@@ -1,6 +1,6 @@
 # SPEC-003: Storage and the record repository
 
-Status: **Draft** · Task: T4 · Crate: `pressa-storage`
+Status: **Approved** · Task: T4 · Crate: `pressa-storage`
 · ADRs: [0002](../docs/adr/0002-synchronous-rusqlite.md), [0003](../docs/adr/0003-json-documents-not-eav.md)
 
 ## Problem
