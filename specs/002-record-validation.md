@@ -1,6 +1,6 @@
 # SPEC-002: Record validation
 
-Status: **Draft** · Task: T3 · Crate: `pressa-core`
+Status: **Implemented** · Task: T3 · Crate: `pressa-core`
 · ADR: [0003](../docs/adr/0003-json-documents-not-eav.md)
 
 ## Problem
