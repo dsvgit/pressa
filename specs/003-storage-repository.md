@@ -82,7 +82,10 @@ ordering and `Corrupt`.
 - `tests/storage_contract.rs`: one suite, generic over `impl RecordRepository`,
   instantiated twice. New behaviour is added here, never to one implementation's
   own tests.
-- SQLite tests use a `tempfile::TempDir`; no test touches a fixed path.
+- SQLite tests use `tests/support::TempTree`; no test touches a fixed path.
+  Hand-rolled rather than `tempfile`, because a new dependency needs an ADR
+  (`AGENTS.md`) and `pressa-app/tests/support` already made the same call. It
+  creates a per-process, per-test directory and removes it on `Drop`.
 - One explicit reopen test — the Golden Path's step 13 depends on it.
 
 ## Open questions

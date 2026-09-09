@@ -132,6 +132,16 @@ boundary, not cosmetics — never relax it without revisiting this query.
 
 M0 uses `LIKE`. FTS5 is a later optimisation and needs its own ADR.
 
+Search compares a field's *rendered text*, so a non-text field is rendered
+before it is matched — and **SQLite's rendering is the contract**, because it is
+the one that cannot be changed. It is not Rust's: SQLite prints the JSON number
+`1.0` as `1.0` where Rust prints `1`, and `1e20` as `1.0e+20` where Rust prints
+twenty-one digits. `MemoryRepository` therefore reimplements SQLite's `%!.15g`
+(`values::real_text`) rather than using `f64`'s own formatting, and keeps JSON
+integers as `i64` so that a value past 2^53 matches by its digits. A search that
+finds a number in one adapter and misses it in the other is the exact drift
+[SPEC-003](../specs/003-storage-repository.md) exists to prevent.
+
 ## 5. Implementations
 
 ### `SqliteRepository`

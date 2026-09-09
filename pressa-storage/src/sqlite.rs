@@ -221,13 +221,15 @@ fn push_limit_offset(sql: &mut String, values: &mut Vec<SqlValue>, params: &List
 
 /// The value to bind when comparing against `json_extract`.
 ///
-/// Numbers always bind as a double: SQLite compares INTEGER and REAL
-/// numerically, so a stored `7` matches a searched `7.0`, which is what
-/// `JsonKey` promises.
+/// Each kind binds as the storage class SQLite would have kept it in, so an
+/// integer past 2^53 compares by its digits rather than by the nearest double.
+/// Across the two kinds SQLite still compares numerically, so a stored `7`
+/// matches a searched `7.0` — which is what `JsonKey` promises.
 fn bound_value(key: &JsonKey) -> SqlValue {
     match key {
         JsonKey::Null => SqlValue::Null,
-        JsonKey::Number(number) => SqlValue::Real(*number),
+        JsonKey::Integer(whole) => SqlValue::Integer(*whole),
+        JsonKey::Real(number) => SqlValue::Real(*number),
         JsonKey::Text(text) => SqlValue::Text(text.clone()),
     }
 }

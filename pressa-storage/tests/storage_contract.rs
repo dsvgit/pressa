@@ -51,6 +51,29 @@ fn ids(records: &[Record]) -> Vec<String> {
     records.iter().map(|record| record.id.as_string()).collect()
 }
 
+/// Sorts by `field`, leaving everything else default.
+///
+/// A test helper rather than a constructor on `ListParams`: the spec asks for
+/// the struct and its `Default`, and test ergonomics is no reason to widen
+/// `pressa-core`'s public API.
+fn sorted_by(field: &str, direction: SortDirection) -> ListParams {
+    ListParams {
+        sort_by: Some(field.to_string()),
+        sort_direction: direction,
+        ..ListParams::default()
+    }
+}
+
+/// Searches for `term` across `fields`, leaving everything else default.
+fn searching(term: &str, fields: &[&str]) -> ListParams {
+    ListParams {
+        search: Some(term.to_string()),
+        // `map` copies each `&str` into an owned `String` the struct can keep.
+        search_fields: fields.iter().map(|field| field.to_string()).collect(),
+        ..ListParams::default()
+    }
+}
+
 /// Creates one record per title, in order, so ids ascend with the arguments.
 fn create_titled<R: RecordRepository>(repo: &R, collection: &str, titles: &[&str]) -> Vec<Record> {
     titles
@@ -308,15 +331,12 @@ fn check_sort_by_a_field_runs_both_ways<R: RecordRepository>(repo: &R) {
     create_titled(repo, "posts", &["banana", "apple", "cherry"]);
 
     let ascending = repo
-        .list("posts", &ListParams::sorted_by("title", SortDirection::Asc))
+        .list("posts", &sorted_by("title", SortDirection::Asc))
         .expect("list");
     assert_eq!(titles(&ascending), vec!["apple", "banana", "cherry"]);
 
     let descending = repo
-        .list(
-            "posts",
-            &ListParams::sorted_by("title", SortDirection::Desc),
-        )
+        .list("posts", &sorted_by("title", SortDirection::Desc))
         .expect("list");
     assert_eq!(titles(&descending), vec!["cherry", "banana", "apple"]);
 }
@@ -348,7 +368,7 @@ fn check_sort_is_stable_when_keys_are_equal<R: RecordRepository>(repo: &R) {
     };
 
     for direction in [SortDirection::Asc, SortDirection::Desc] {
-        let params = ListParams::sorted_by("title", direction);
+        let params = sorted_by("title", direction);
         let first = repo.list("posts", &params).expect("list");
         let again = repo.list("posts", &params).expect("list");
 
@@ -371,7 +391,7 @@ fn check_sort_tolerates_a_missing_field<R: RecordRepository>(repo: &R) {
     let without = create(repo, "posts", json!({ "title": "has none" }));
 
     let ascending = repo
-        .list("posts", &ListParams::sorted_by("rank", SortDirection::Asc))
+        .list("posts", &sorted_by("rank", SortDirection::Asc))
         .expect("list");
 
     // Absent sorts before present, the way SQL orders NULL first ascending.
@@ -400,7 +420,7 @@ fn check_search_is_case_insensitive_over_the_named_fields<R: RecordRepository>(r
     create(repo, "posts", json!({ "title": "Nothing", "body": "here" }));
 
     let search = |term: &str, fields: &[&str]| {
-        let params = ListParams::searching(term, fields);
+        let params = searching(term, fields);
         let found = repo.list("posts", &params).expect("list");
         // `count` must agree with `list`, or paging a search would lie.
         assert_eq!(
@@ -443,17 +463,69 @@ fn check_search_is_case_insensitive_over_the_named_fields<R: RecordRepository>(r
     );
 }
 
+/// Searching a number field matches the number *as text*, and both adapters
+/// must render it the same way — SQLite's way, since it is the one that cannot
+/// be changed.
+///
+/// `number` is an M0 field type, so this is reachable: without it, searching
+/// `1.0` found the record against the file and missed it against memory, which
+/// is precisely the "passes against memory, breaks in production" failure the
+/// spec's Problem section is about.
+fn check_search_renders_numbers_the_way_sqlite_does<R: RecordRepository>(repo: &R) {
+    // Each case gets its own collection, so one case's digits can never satisfy
+    // another's search.
+    let finds = |case: &str, value: Json, term: &str| {
+        let record = create(repo, case, json!({ "rank": value }));
+        let found = repo.list(case, &searching(term, &["rank"])).expect("list");
+        ids(&found) == vec![record.id.as_string()]
+    };
+
+    assert!(
+        finds("whole", json!(7), "7"),
+        "an integer renders as itself"
+    );
+    assert!(
+        !finds("whole_with_a_point", json!(7), "7.0"),
+        "an integer has no decimal point to match"
+    );
+    assert!(
+        finds("real", json!(1.0), "1.0"),
+        "a real keeps its point, the way SQLite prints it"
+    );
+    assert!(finds("fraction", json!(2.5), "2.5"));
+    assert!(
+        finds("huge", json!(1e20), "1.0e+20"),
+        "a large real renders in exponent form, not as twenty-one digits"
+    );
+    assert!(
+        finds("tiny", json!(1e-7), "1.0e-07"),
+        "and a small one likewise, with a two-digit exponent"
+    );
+    assert!(
+        finds(
+            "past_the_double",
+            json!(9_007_199_254_740_993_i64),
+            "9007199254740993"
+        ),
+        "an integer past 2^53 keeps every digit rather than rounding"
+    );
+    assert!(
+        finds("flag", json!(true), "1"),
+        "a boolean searches as the number SQLite makes of it"
+    );
+}
+
 /// `%` and `_` are characters the user typed, not wildcards.
 fn check_search_treats_wildcards_as_literals<R: RecordRepository>(repo: &R) {
     let literal = create(repo, "posts", json!({ "title": "100% done" }));
     create(repo, "posts", json!({ "title": "nothing here" }));
 
-    let params = ListParams::searching("0% d", &["title"]);
+    let params = searching("0% d", &["title"]);
     let found = repo.list("posts", &params).expect("list");
     assert_eq!(ids(&found), vec![literal.id.as_string()]);
 
     // If `%` were a wildcard this would match everything; it must match nothing.
-    let params = ListParams::searching("%nothing", &["title"]);
+    let params = searching("%nothing", &["title"]);
     assert!(repo.list("posts", &params).expect("list").is_empty());
 }
 
@@ -532,11 +604,11 @@ fn check_hostile_field_names_are_refused<R: RecordRepository>(repo: &R) {
     create(repo, "posts", json!({ "title": "a" }));
     let hostile = "title') = 1 OR (1";
 
-    let params = ListParams::sorted_by(hostile, SortDirection::Asc);
+    let params = sorted_by(hostile, SortDirection::Asc);
     let error = repo.list("posts", &params).expect_err("sort_by is checked");
     assert_eq!(invalid_field(error), hostile);
 
-    let params = ListParams::searching("a", &[hostile]);
+    let params = searching("a", &[hostile]);
     let error = repo
         .list("posts", &params)
         .expect_err("search_fields is checked");
@@ -645,6 +717,10 @@ macro_rules! contract_suite {
             contract_test!(
                 search_is_case_insensitive_over_the_named_fields,
                 check_search_is_case_insensitive_over_the_named_fields
+            );
+            contract_test!(
+                search_renders_numbers_the_way_sqlite_does,
+                check_search_renders_numbers_the_way_sqlite_does
             );
             contract_test!(
                 search_treats_wildcards_as_literals,

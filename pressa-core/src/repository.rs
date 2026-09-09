@@ -40,27 +40,6 @@ pub struct ListParams {
     pub sort_direction: SortDirection,
 }
 
-impl ListParams {
-    /// Sorts by `field` in the given direction, leaving everything else default.
-    pub fn sorted_by(field: &str, direction: SortDirection) -> Self {
-        ListParams {
-            sort_by: Some(field.to_string()),
-            sort_direction: direction,
-            ..ListParams::default()
-        }
-    }
-
-    /// Searches for `term` across `fields`, leaving everything else default.
-    pub fn searching(term: &str, fields: &[&str]) -> Self {
-        ListParams {
-            search: Some(term.to_string()),
-            // `map` copies each `&str` into an owned `String` the struct can keep.
-            search_fields: fields.iter().map(|field| field.to_string()).collect(),
-            ..ListParams::default()
-        }
-    }
-}
-
 /// Everything storage can refuse to do.
 ///
 /// `rusqlite::Error` is deliberately *not* a variant: this type is named in the
