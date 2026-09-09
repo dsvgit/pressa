@@ -2,6 +2,7 @@
 //! `AppError` — the business API the TUI talks to instead of SQL.
 
 pub mod config;
+pub mod domain;
 pub mod error;
 pub mod services;
 

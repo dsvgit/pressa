@@ -123,9 +123,11 @@ main.rs                                          ← a shim, nothing else
           → run event loop
 ```
 
-The last two steps are T7's ([SPEC-006](../specs/006-tui-shell.md)); until that
-task lands, `cli::dev` stops after the services and returns
-`CliError::NotImplementedYet` ([SPEC-005](../specs/005-cli.md) screen I).
+The last two steps arrived with T7 ([SPEC-006](../specs/006-tui-shell.md)):
+`cli::dev` ends in `tui::run(schema)`, which takes the terminal, runs the loop
+and gives it back. A stdout that is not a terminal is refused before raw mode is
+touched, so a piped run says `pressa: the terminal could not be prepared: …` and
+exits 1 rather than leaving the caller's shell in raw mode.
 
 ### 3.2 The loop
 

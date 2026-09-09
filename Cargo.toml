@@ -32,4 +32,12 @@ clap = { version = "4", features = ["derive"] }
 # the only way to observe an exit code and the stdout/stderr split.
 assert_cmd = "2"
 predicates = "3"
+# The terminal UI — ADR-0001. `crossterm` is ratatui's backend and the source of
+# `KeyEvent`, which the keymap table is written in, so both are named here.
+# Default features off: `underline-color` and `palette` are colour machinery for
+# a palette `docs/tui.md` §6 does not allow.
+ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
+crossterm = "0.28"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std"] }
+# Snapshot tests for every frame — ADR-0011. Test-only, and only in `pressa-tui`.
+insta = "1"

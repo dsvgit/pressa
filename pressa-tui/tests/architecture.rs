@@ -307,7 +307,12 @@ fn app_knows_nothing_of_the_ui_or_sqlite() {
 fn the_tui_never_touches_sqlite_directly() {
     // Интерфейс (tui) не должен напрямую трогать SQLite — доступ к данным
     // должен идти через storage/app, а не в обход них.
-    assert_forbidden("pressa-tui", &["rusqlite"]);
+    //
+    // pressa-core запрещён с T7 (SPEC-006): доменные типы (`Schema`,
+    // `Collection`) приходят в интерфейс через `pressa_app::domain` —
+    // перечисление (re-export) в app, — поэтому "tui видит только типы app"
+    // (docs/architecture.md §2) выполняется буквально, а не на словах.
+    assert_forbidden("pressa-tui", &["rusqlite", "pressa-core"]);
 }
 
 #[test]

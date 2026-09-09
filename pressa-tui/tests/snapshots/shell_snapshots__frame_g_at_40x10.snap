@@ -1,0 +1,15 @@
+---
+source: pressa-tui/tests/shell_snapshots.rs
+assertion_line: 147
+expression: "draw(40, 10, &state).backend()"
+---
+"                                        "
+"                                        "
+"                                        "
+"                                        "
+"           terminal too small           "
+"       needs 60x16, this is 40x10       "
+"                                        "
+"                                        "
+"                                        "
+"                                        "

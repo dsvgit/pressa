@@ -451,12 +451,17 @@ fn resolve_project_reports_a_missing_project() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn dev_does_every_startup_step_and_then_stops_at_the_screen() {
+fn dev_does_every_startup_step_and_then_takes_the_screen() {
     let tree = TempTree::new("dev");
     tree.write("pressa.yaml", &example_yaml());
 
+    // Spawned by `assert_cmd`, so stdout is a pipe rather than a terminal: the
+    // shell refuses to enter one it cannot own, and says so (SPEC-006 screen I).
     let line = one_error_line(pressa(tree.root()).arg("dev").assert());
-    assert_eq!(line, "pressa: the TUI arrives in T7");
+    assert_eq!(
+        line,
+        "pressa: the terminal could not be prepared: stdout is not a terminal"
+    );
 
     // The database was created and migrated on the way.
     let database = tree.root().join(".pressa").join("data.db");
@@ -480,9 +485,13 @@ fn dev_does_every_startup_step_and_then_stops_at_the_screen() {
     // half of "migrated" — the right tables at the version the app expects.
     pressa_storage::SqliteRepository::open(&database).expect("the database opens and migrates");
 
-    // And the log says the services were built before the stub gave up.
+    // And the log says the services were built before the screen was asked for.
     let log = log_of(tree.root());
     assert!(log.contains("services ready"), "log was: {log}");
+    assert!(
+        !log.contains("the TUI arrives in T7"),
+        "the T6 stub is gone: {log}"
+    );
 }
 
 #[test]
@@ -491,7 +500,10 @@ fn no_subcommand_behaves_like_dev() {
     tree.write("pressa.yaml", &example_yaml());
 
     let line = one_error_line(pressa(tree.root()).assert());
-    assert_eq!(line, "pressa: the TUI arrives in T7");
+    assert_eq!(
+        line,
+        "pressa: the terminal could not be prepared: stdout is not a terminal"
+    );
     assert!(tree.root().join(".pressa").join("data.db").is_file());
 }
 
@@ -518,7 +530,7 @@ fn log_level_error_drops_every_event_the_default_level_keeps() {
     let tree = TempTree::new("log-level");
     tree.write("pressa.yaml", &example_yaml());
 
-    // `dev`'s events are INFO and WARN, so `--log-level error` writes nothing.
+    // `dev`'s events are all INFO, so `--log-level error` writes nothing.
     pressa(tree.root())
         .args(["--log-level", "error", "dev"])
         .assert()

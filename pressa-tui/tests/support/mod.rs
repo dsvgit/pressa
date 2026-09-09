@@ -13,6 +13,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use pressa_app::config::load_schema;
+use pressa_app::domain::Schema;
+
 /// Bumped per tree so two trees in the same process never collide.
 static COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -80,4 +83,22 @@ pub fn example_schema_path() -> PathBuf {
         .join("examples")
         .join("blog")
         .join("pressa.yaml")
+}
+
+/// A [`Schema`] for a test, loaded from YAML written into a throwaway tree.
+///
+/// The long way round on purpose: `pressa-tui` cannot name `pressa-core`, so
+/// `ProjectConfig`, `Field` and the rest are out of reach and the loader is the
+/// only door in (SPEC-006 "Boundaries").
+pub fn schema_from_yaml(label: &str, yaml: &str) -> Schema {
+    let tree = TempTree::new(label);
+    let path = tree.write("pressa.yaml", yaml);
+    // The tree is dropped at the end of this function; the schema owns its data.
+    load_schema(&path).expect("the fixture schema is valid")
+}
+
+/// `examples/blog/pressa.yaml`, loaded rather than copied so the example and
+/// the frames cannot drift apart.
+pub fn example_schema() -> Schema {
+    load_schema(&example_schema_path()).expect("the example schema is valid")
 }
