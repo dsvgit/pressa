@@ -47,7 +47,7 @@ human doesn't have to.** See [ADR-0006](adr/0006-workspace-of-four-crates.md).
 |---|---|---|---|
 | `pressa-core` | `Schema`, `Collection`, `Field`, `FieldType`, `Value`, `Record`, validation, `RecordRepository` trait, `ListParams`, domain errors including `StorageError` | `serde`, `serde_json`, `thiserror`, `chrono`, `ulid`, `indexmap` | ratatui, crossterm, rusqlite, clap, tokio |
 | `pressa-storage` | `SqliteRepository`, `MemoryRepository`, migration runner | `pressa-core`, `rusqlite`, `serde_json`, `chrono` | ratatui, crossterm, clap |
-| `pressa-app` | `RecordService`, `CollectionService`, config loading, `AppError` | `pressa-core`, `serde`, `serde_yaml`, `indexmap`, `thiserror` | ratatui, crossterm, rusqlite, pressa-storage |
+| `pressa-app` | `RecordService`, `CollectionService`, config loading, `AppError` | `pressa-core`, `serde`, `serde_yaml`, `serde_json`, `indexmap`, `thiserror` | ratatui, crossterm, rusqlite, pressa-storage (outside `[dev-dependencies]` — [ADR-0009](adr/0009-test-only-dependency-on-pressa-storage.md)) |
 | `pressa-tui` | binary `pressa`: clap CLI, terminal lifecycle, `AppState`, `Command`, keymap, screens, widgets, tracing setup | `pressa-app`, `pressa-storage` (wiring only, in `main.rs`), `ratatui`, `crossterm`, `clap`, `thiserror`, `tracing`, `tracing-subscriber` | — |
 
 `pressa-tui` is allowed to name `pressa-storage` in exactly one place: the
@@ -63,9 +63,17 @@ for the same reason `pressa-app` does: they appear in the port's own signatures.
 
 `pressa-app` carries `serde` and `indexmap` alongside `serde_yaml` because the
 config loader deserializes into them directly and builds the `IndexMap` that
-`Schema.collections` is declared as; `thiserror` is there because `AppError`
+`Schema.collections` is declared as; `serde_json` because `Record.data` and the
+service signatures are JSON documents; `thiserror` is there because `AppError`
 and `ConfigError` are library error types (`AGENTS.md`). None of these is a new
 third-party choice — they are the same crates `pressa-core` already uses.
+
+`pressa-app` names `pressa-storage` in `[dev-dependencies]` and nowhere else:
+its service tests need an implementation of the `RecordRepository` port, and
+`MemoryRepository` is the one that exists for the purpose
+([ADR-0009](adr/0009-test-only-dependency-on-pressa-storage.md)). `rusqlite`
+stays forbidden to `pressa-app` in every section, dev included — that is the
+rule this exception leaves intact, and `tests/architecture.rs` enforces both.
 
 ## 3. Data flow
 

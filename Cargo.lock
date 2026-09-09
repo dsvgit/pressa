@@ -299,7 +299,9 @@ version = "0.0.0"
 dependencies = [
  "indexmap",
  "pressa-core",
+ "pressa-storage",
  "serde",
+ "serde_json",
  "serde_yaml",
  "thiserror",
 ]

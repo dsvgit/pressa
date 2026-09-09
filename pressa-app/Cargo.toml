@@ -11,4 +11,12 @@ pressa-core.workspace = true
 indexmap.workspace = true
 serde.workspace = true
 serde_yaml.workspace = true
+# `Record.data` and the service signatures are JSON documents (ADR-0003).
+serde_json.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+# Tests only, and only here — ADR-0009. `MemoryRepository` for the service
+# tests and `SqliteRepository` for the integration test, both required by
+# `specs/004`. `rusqlite` stays forbidden to this crate in every section.
+pressa-storage.workspace = true
