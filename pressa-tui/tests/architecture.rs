@@ -99,6 +99,17 @@ fn inline_package(value: &str) -> Option<&str> {
 /// Важно: считается имя РЕАЛЬНОГО пакета, а не то имя, под которым его
 /// назвали в коде (см. пример с "db = rusqlite" выше).
 fn declared_dependencies(manifest: &str) -> BTreeSet<String> {
+    // По умолчанию считаем ВСЕ разделы, включая [dev-dependencies].
+    declared_dependencies_in(manifest, true)
+}
+
+/// То же самое, но с выбором: учитывать ли `[dev-dependencies]` — раздел
+/// зависимостей, которые нужны ТОЛЬКО тестам и не попадают в готовую программу.
+///
+/// Нужно из-за ADR-0009: `pressa-app` может брать `pressa-storage` в тестах
+/// (там лежат `MemoryRepository` и `SqliteRepository`, без которых сервисы
+/// нечем проверить), но не в обычных зависимостях.
+fn declared_dependencies_in(manifest: &str, include_dev: bool) -> BTreeSet<String> {
     let mut found = BTreeSet::new(); // сюда будем складывать найденные имена зависимостей
     let mut in_dependency_table = false; // "мы сейчас внутри раздела про зависимости?"
     // Если мы внутри блока вида [dependencies.имя_зависимости],
@@ -116,6 +127,10 @@ fn declared_dependencies(manifest: &str) -> BTreeSet<String> {
         if let Some(header) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
             // Мы нашли строку-заголовок. Запоминаем: относится ли она к зависимостям.
             in_dependency_table = header.contains("dependencies");
+            // Если dev-разделы не считаем — выключаемся на [dev-dependencies].
+            if !include_dev && header.contains("dev-dependencies") {
+                in_dependency_table = false;
+            }
             table_of = None; // при входе в новый раздел сбрасываем "текущую зависимость"
 
             if in_dependency_table {
@@ -174,6 +189,23 @@ fn declared_dependencies(manifest: &str) -> BTreeSet<String> {
 /// под каким бы именем он ни был подключён?"
 fn depends_on(manifest: &str, dep: &str) -> bool {
     declared_dependencies(manifest).contains(dep)
+}
+
+/// Как `depends_on`, но не заглядывает в `[dev-dependencies]`.
+fn depends_on_outside_dev(manifest: &str, dep: &str) -> bool {
+    declared_dependencies_in(manifest, false).contains(dep)
+}
+
+/// Как `assert_forbidden`, но разрешает зависимость в тестах (`[dev-dependencies]`)
+/// и запрещает её только в обычных, "рабочих" зависимостях. См. ADR-0009.
+fn assert_forbidden_outside_dev(krate: &str, forbidden: &[&str]) {
+    let manifest = manifest(krate);
+    for dep in forbidden {
+        assert!(
+            !depends_on_outside_dev(&manifest, dep),
+            "{krate} не должен зависеть от {dep} вне [dev-dependencies] (docs/architecture.md §2, ADR-0009)"
+        );
+    }
 }
 
 // Проверяет: коробка krate НЕ должна зависеть ни от одной из "запрещённых" (forbidden).
@@ -254,21 +286,21 @@ fn storage_knows_nothing_of_the_ui() {
 #[test]
 fn app_knows_nothing_of_the_ui_or_sqlite() {
     // "app" (бизнес-логика) не должен знать про интерфейс, ни про конкретную
-    // базу данных rusqlite напрямую, ни про саму коробку pressa-storage —
-    // потому что app должен общаться с хранилищем через общий "интерфейс"
-    // (описанный в pressa-core), а не напрямую с реализацией.
-    // Если бы app зависел от pressa-storage — стрелка зависимости "смотрела бы"
-    // в неправильную сторону (см. §1 архитектуры).
+    // базу данных rusqlite напрямую. rusqlite запрещён ВЕЗДЕ, включая тесты:
+    // это и есть само правило "в бизнес-логике нет SQLite".
     assert_forbidden(
         "pressa-app",
-        &[
-            "ratatui",
-            "crossterm",
-            "rusqlite",
-            "pressa-storage",
-            "pressa-tui",
-        ],
+        &["ratatui", "crossterm", "rusqlite", "pressa-tui"],
     );
+
+    // А вот саму коробку pressa-storage нельзя брать только в рабочие
+    // зависимости: тогда стрелка зависимости "смотрела бы" в неправильную
+    // сторону (§1 архитектуры) — app обязан общаться с хранилищем через
+    // "интерфейс" (порт `RecordRepository` в pressa-core), а не с реализацией.
+    //
+    // В тестах она разрешена (ADR-0009): `MemoryRepository` для этого и создан,
+    // а проверить сервисы вообще нечем без какой-нибудь реализации порта.
+    assert_forbidden_outside_dev("pressa-app", &["pressa-storage"]);
 }
 
 #[test]
@@ -276,6 +308,33 @@ fn the_tui_never_touches_sqlite_directly() {
     // Интерфейс (tui) не должен напрямую трогать SQLite — доступ к данным
     // должен идти через storage/app, а не в обход них.
     assert_forbidden("pressa-tui", &["rusqlite"]);
+}
+
+#[test]
+fn a_test_only_dependency_on_storage_is_allowed_but_a_real_one_is_not() {
+    // Проверка исключения из ADR-0009 — на выдуманных текстах Cargo.toml,
+    // а не на настоящем файле, чтобы тест проверял ПРАВИЛО, а не текущий проект.
+    let dev_only = "[dependencies]\npressa-core.workspace = true\n\n[dev-dependencies]\npressa-storage.workspace = true";
+    let real = "[dependencies]\npressa-core.workspace = true\npressa-storage.workspace = true";
+
+    // Обычный сканер видит зависимость в обоих случаях...
+    assert!(depends_on(dev_only, "pressa-storage"));
+    assert!(depends_on(real, "pressa-storage"));
+
+    // ...а тот, что игнорирует dev-разделы, — только во втором.
+    assert!(
+        !depends_on_outside_dev(dev_only, "pressa-storage"),
+        "зависимость только для тестов не должна считаться нарушением"
+    );
+    assert!(
+        depends_on_outside_dev(real, "pressa-storage"),
+        "настоящая зависимость обязана считаться нарушением"
+    );
+
+    // И рабочие зависимости после dev-раздела снова считаются: выключение
+    // не должно "залипать" до конца файла.
+    let after_dev = "[dev-dependencies]\npressa-storage.workspace = true\n\n[build-dependencies]\nrusqlite = \"0.32\"";
+    assert!(depends_on_outside_dev(after_dev, "rusqlite"));
 }
 
 #[test]
