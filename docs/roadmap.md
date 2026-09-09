@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: Approved · Last updated: 2026-09-06
+Status: Approved · Last updated: 2026-09-09
 
 ## 1. Milestones
 
@@ -30,7 +30,7 @@ T9 the Golden Path works end to end; T10–T12 make it comfortable.
 | T4 | SQLite: migrations, `SqliteRepository`, `MemoryRepository` | storage | [003](../specs/003-storage-repository.md) | Shared contract suite passes against both implementations |
 | T5 | `RecordService`, `CollectionService`, `AppError` | app | [004](../specs/004-app-services.md) | Integration test: load → create → list → update → delete |
 | T6 | CLI: `pressa init`, `pressa dev`, `pressa validate` | tui | [005](../specs/005-cli.md) | `assert_cmd`: `init` writes `pressa.yaml` and `.pressa/`; `validate` exits non-zero on a bad schema |
-| T7 | TUI shell: terminal guard, layout, sidebar, breadcrumbs, hint bar, keymap | tui | [006](../specs/006-tui-shell.md) | 80×24 snapshot of Home; terminal restores on panic |
+| T7 | TUI shell: terminal guard, layout, sidebar, breadcrumbs, hint bar, keymap | tui, app | [006](../specs/006-tui-shell.md) | 80×24 snapshot of Home; terminal restores on panic |
 | T8 | List view: table from `list_columns`, navigation, empty state | tui | [007](../specs/007-list-view.md) | Snapshots before and after two `j`; `Enter` emits `EditRecord` |
 | T9 | Record editor: form from schema, 7 editors, dirty state, save, errors | tui | [008](../specs/008-record-editor.md) | **Closes the Golden Path** — a saved record survives a restart |
 | T10 | Create (`n`), delete (`d`) with confirmation | tui | 009 | Deletion is impossible without confirming; selection stays valid afterwards |
@@ -58,6 +58,7 @@ answer and agents do not reintroduce them as improvements.
 | Undo/redo stack | 1.md | Cheap in Elm architecture, but nothing in the Golden Path needs it |
 | Per-collection SQL tables | — | [ADR-0003](adr/0003-json-documents-not-eav.md) |
 | FTS5 search | 2.md | `LIKE` over `list_columns` is enough at MVP data sizes |
+| Writing the `collections` config snapshot | — | The table is created in M0 and written in M3, where it is first read. Writing it earlier costs a port method, both adapters and a contract case for a table nothing opens ([SPEC-006](../specs/006-tui-shell.md) Q3, [`storage.md`](storage.md) §2) |
 
 ## 4. Provenance
 

@@ -1,6 +1,6 @@
 # Terminal UI
 
-Status: Approved · Last updated: 2026-09-06 · Crate: `pressa-tui`
+Status: Approved · Last updated: 2026-09-09 · Crate: `pressa-tui`
 
 ## 1. State model
 
@@ -110,13 +110,26 @@ pub enum Command {
 }
 
 pub struct KeyBinding {
-    pub context: Context,       // Sidebar | List | Editor | EditorInput | Overlay
+    pub context: Context,       // Global | Sidebar | List | Editor | EditorInput | Overlay
     pub key: KeyEvent,
     pub command: Command,
     pub description: &'static str,
-    pub show_in_hint_bar: bool,
+    pub hint: Hint,
+}
+
+/// What the hint bar prints for this binding, if anything. `ShownAs` exists
+/// because `j` and `↓` are two bindings that must read as one `↑↓ Navigate`
+/// entry; one field rather than a `bool` plus a label, so that a hidden
+/// binding carrying a label is unrepresentable (SPEC-006, Q6).
+pub enum Hint {
+    Hidden,
+    Shown,                  // "<key label> <description>"
+    ShownAs(&'static str),  // that label instead of the key's own
 }
 ```
+
+The hint bar is the current context's non-`Hidden` bindings in table order,
+then the non-`Hidden` `Global` ones, joined with three spaces.
 
 The keymap is **one static table**. Both the bottom hint bar and the `?` help
 overlay are generated from it by filtering on the current context. A key that
@@ -128,11 +141,11 @@ possible. See [ADR-0005](adr/0005-command-and-keymap-architecture.md).
 | Context | Key | Command | Hint bar |
 |---|---|---|---|
 | global | `?` | OpenHelp | yes |
-| global | `q` | Back / Quit at Home | yes |
 | global | `Ctrl+C` | Quit | no |
 | Sidebar | `j` / `↓` | MoveDown | yes (as `↑↓`) |
 | Sidebar | `k` / `↑` | MoveUp | — |
 | Sidebar | `Enter` / `l` / `→` | Select → route to List | yes |
+| Sidebar | `q` | Quit | yes |
 | List | `j` / `↓` | MoveDown | yes |
 | List | `k` / `↑` | MoveUp | — |
 | List | `g` / `G` | GoToTop / GoToBottom | no |
@@ -143,6 +156,7 @@ possible. See [ADR-0005](adr/0005-command-and-keymap-architecture.md).
 | List | `/` | OpenSearch | yes |
 | List | `r` | Refresh | no |
 | List | `h` / `←` / `Esc` | FocusSidebar | yes (as `Esc Back`) |
+| List | `q` | Back | — |
 | Editor | `Tab` / `j` | NextField | yes |
 | Editor | `Shift+Tab` / `k` | PrevField | — |
 | Editor | `Enter` | BeginEdit (text) / ToggleBoolean / NextOption (select) | yes |
@@ -154,6 +168,11 @@ possible. See [ADR-0005](adr/0005-command-and-keymap-architecture.md).
 | EditorInput | `Esc` | CancelEdit — restores the original value | yes |
 | Overlay | `y` / `Enter` | Confirm | yes |
 | Overlay | `n` / `Esc` / `q` | Dismiss | yes |
+
+`q` is two context rows rather than one global row with a branch inside
+`update`: it quits from the sidebar, where there is nowhere left to go back to,
+and goes back from anywhere else. A context binding shadows a global one, so
+resolution stays a table lookup (SPEC-006, "The keymap").
 
 Two modes inside the editor — `Editor` navigates between fields, `EditorInput`
 types into one — is the vim distinction, and it is what keeps `j` usable for

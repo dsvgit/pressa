@@ -161,11 +161,11 @@ order. Two details in them are drawn from behaviour that spec
 │ > Posts            │                                                         │
 │                    │                                                         │
 │                    │                                                         │
+│                    │                                                         │
+│                    │                                                         │
 │                    │              Select a collection to begin.              │
 │                    │                                                         │
 │                    │                 blog-cms · 1 collection                 │
-│                    │                                                         │
-│                    │                                                         │
 │                    │                                                         │
 │                    │                                                         │
 │                    │                                                         │
@@ -180,8 +180,10 @@ order. Two details in them are drawn from behaviour that spec
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Wording and singular/plural forms of `blog-cms · 1 collection` belong to
-[006](006-tui-shell.md).
+Wording, singular/plural forms of `blog-cms · 1 collection`, and the vertical
+centring of that three-row block belong to [006](006-tui-shell.md). This frame
+had the block two rows above centre until 2026-09-09, when the shell spec stated
+the rule and the frames were reconciled (SPEC-006, Q5).
 
 ### B — List, empty (step 4)
 
