@@ -1,6 +1,6 @@
 # Storage
 
-Status: Approved · Last updated: 2026-09-06 · Crate: `pressa-storage`
+Status: Approved · Last updated: 2026-09-09 · Crate: `pressa-storage`
 
 ## 1. Shape of the decision
 
@@ -47,10 +47,17 @@ CREATE TABLE IF NOT EXISTS meta (
 The composite index `(collection, id)` covers the default query — list one
 collection ordered by creation time — without a second sort step.
 
-`collections` is written on every startup and never read in M0. It costs one
-upsert per collection per launch and buys the ability, in M3, to detect that a
-field was renamed or removed since the data was written. Do not delete it as
-"dead code".
+`collections` is created by the migration in M0 and **written in M3**, where it
+is first read: it buys the ability to detect that a field was renamed or removed
+since the data was written, and nothing before that opens it. T7 was originally
+given the write, on the grounds that it is where "application start" becomes
+real; the assignment was withdrawn when the spec was finalised, because
+`RecordRepository` has no method for it and `Collection` is not `Serialize`, so
+writing it in M0 costs a port method, both adapters and a contract-suite case
+for a table M0 never reads ([SPEC-006](../specs/006-tui-shell.md) "Decisions
+taken", Q3; [`roadmap.md`](roadmap.md) §3). Do not delete the table as "dead
+code": the schema it belongs to is versioned forward-only, and M3 expects it to
+be there.
 
 `meta` holds `schema_version` for the migration runner.
 
