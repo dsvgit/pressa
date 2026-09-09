@@ -7,3 +7,14 @@ publish.workspace = true
 
 [dependencies]
 pressa-core.workspace = true
+# Synchronous SQLite, bundled — ADR-0002.
+rusqlite.workspace = true
+# `Record.data` is a JSON document (ADR-0003) and `created_at` a `DateTime<Utc>`;
+# both appear in the port's signatures, so both crates are named here too.
+serde_json.workspace = true
+chrono.workspace = true
+
+[dev-dependencies]
+# The migration tests assert on `meta` and plant a future `schema_version`,
+# which means reading the file the runner wrote rather than trusting it.
+rusqlite.workspace = true

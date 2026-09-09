@@ -173,6 +173,12 @@ pub struct RecordId(Ulid);
 ULID over UUIDv4 so that `ORDER BY id` is chronological and the default list
 view is stable without an extra index.
 
+Ids are minted from a **monotonic** generator held for the process. A plain ULID
+re-randomises its low bits on every call, so two ids made in the same
+millisecond can come out in either order — and "created two records, they list
+in the wrong order" is exactly the bug `ORDER BY id` is supposed to be immune
+to. `RecordId::new()` guarantees each id is larger than the last.
+
 `data` is the *whole* document as an object; fields absent from the object are
 absent, not `null`. Validation decides whether that is acceptable.
 
@@ -229,6 +235,10 @@ pub trait RecordRepository {
     fn find_by_field(&self, collection: &str, field: &str, value: &serde_json::Value) -> Result<Vec<Record>, StorageError>;
 }
 ```
+
+`StorageError` is defined here too, next to the trait that returns it — see
+[`architecture.md`](architecture.md) §2 for why it cannot live in
+`pressa-storage`, and [`storage.md`](storage.md) §6 for its variants.
 
 Synchronous by decision — see [ADR-0002](adr/0002-synchronous-rusqlite.md).
 `find_by_field` exists to support uniqueness checks without giving the service

@@ -11,3 +11,7 @@ indexmap.workspace = true
 serde_json.workspace = true
 # `DateTime` fields are RFC 3339 strings and must be parsed to be validated.
 chrono.workspace = true
+# `Record.id` is a ULID — domain-model.md §7.
+ulid.workspace = true
+# `StorageError` is a library error type — AGENTS.md.
+thiserror.workspace = true
