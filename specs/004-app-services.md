@@ -1,6 +1,6 @@
 # SPEC-004: Application services
 
-Status: **Draft** · Task: T5 · Crate: `pressa-app`
+Status: **Approved** · Task: T5 · Crate: `pressa-app`
 
 ## Problem
 
