@@ -81,12 +81,19 @@ Then check the diff against the spec's acceptance criteria, one by one, and set
 the spec's status to `Implemented`. If you built something the spec did not ask
 for, remove it.
 
+If your change alters what the CLI does or prints, update the `sandbox` recipe
+in the [`justfile`](justfile) in the same PR and run `just sandbox` — it is the
+directory a human drives the binary in, and its `README.md` promises what each
+command prints. Fix it there, never in `/tmp`
+([`docs/development.md`](docs/development.md) §8).
+
 ## Definition of done
 
 - [ ] Every acceptance criterion has a test that fails without your change
 - [ ] `just ci` is green
 - [ ] No `unwrap()` outside tests, no new dependency without an ADR
 - [ ] Crate boundaries respected
+- [ ] `just sandbox` still shows what changed, if the CLI changed
 - [ ] Snapshots reviewed, not auto-accepted
 - [ ] Spec status updated
 - [ ] Nothing extra implemented

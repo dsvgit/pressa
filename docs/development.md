@@ -121,8 +121,28 @@ just test     cargo test --workspace
 just ci       fmt --check + lint + test
 just snap     cargo insta review
 just run      cargo run -p pressa-tui -- dev --project examples/blog
+just sandbox  rebuild /tmp/pressa-sandbox: throwaway projects to drive by hand
 just hooks    git config core.hooksPath .githooks
 ```
+
+`just sandbox` is how a change is looked at rather than asserted about. It
+generates `/tmp/pressa-sandbox` — a `pressa` wrapper that rebuilds before every
+run, an empty directory for `init`, a copy of `examples/blog` for `validate` and
+`dev`, a deliberately broken schema, and a nested tree for discovery — with a
+`README.md` listing the commands worth trying and what each should print. It
+lives in `/tmp` because everything in it is disposable; running the recipe again
+wipes it, experiments included.
+
+Generated, not committed, and for a reason: a checked-in sandbox is a second
+copy of `examples/blog` and of the CLI's behaviour, and both drift. Two rules
+keep it honest, and they are part of the definition of done below:
+
+- **The recipe is the sandbox.** Fix it in the `justfile`, never in `/tmp`.
+- **A task that changes what the CLI prints updates the recipe in the same
+  PR** — the flags it demonstrates, the transcripts its README promises, the
+  fixtures it writes. The reviewer runs `just sandbox` and follows its README;
+  a promise that no longer holds is a review finding like any other. T7 replacing
+  `dev`'s `the TUI arrives in T7` stub is the first such change due.
 
 Run `just hooks` once per clone. It points git at [`.githooks/`](../.githooks),
 whose `pre-commit` runs `rustfmt` over the staged `.rs` files and re-stages
@@ -145,5 +165,6 @@ A task is done when all of these hold:
 - [ ] no new dependency without an ADR;
 - [ ] crate boundaries respected (see [`architecture.md`](architecture.md) §2);
 - [ ] snapshots reviewed deliberately, not auto-accepted;
+- [ ] `just sandbox` still demonstrates what the change did to the CLI (§8);
 - [ ] the spec's status is `Implemented`;
 - [ ] nothing implemented that the spec did not ask for.

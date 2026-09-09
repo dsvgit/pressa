@@ -67,10 +67,17 @@ insta snapshot tests.
 ## Development
 
 ```bash
-just ci      # fmt --check + clippy -D warnings + test
-just run     # open the example project
-just snap    # review snapshot diffs
+just ci       # fmt --check + clippy -D warnings + test
+just run      # open the example project
+just snap     # review snapshot diffs
+just sandbox  # throwaway projects in /tmp to drive the CLI by hand
 ```
+
+`just sandbox` regenerates `/tmp/pressa-sandbox` and prints where it is; its
+`README.md` lists what to run and what each command should print. It is
+generated from this repository, so it is fixed in the `justfile` rather than in
+`/tmp`, and a change to the CLI updates it in the same PR
+([`docs/development.md`](docs/development.md) §8).
 
 ## Provenance
 
