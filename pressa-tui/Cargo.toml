@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+# `clap`'s `about` line, printed by `pressa --help` (SPEC-005 screen A).
+description = "A terminal-native, schema-driven data manager"
 
 [[bin]]
 name = "pressa"
@@ -13,6 +15,14 @@ path = "src/main.rs"
 pressa-app.workspace = true
 # Wiring only, in the composition root — see ADR-0006.
 pressa-storage.workspace = true
+# The CLI: three subcommands, `--project` and `--log-level` (SPEC-005).
+clap.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[dev-dependencies]
+# Tests only, and only here — ADR-0010. The CLI's criteria are about a real
+# process's exit code and which stream it wrote to, which needs a spawn.
+assert_cmd.workspace = true
+predicates.workspace = true

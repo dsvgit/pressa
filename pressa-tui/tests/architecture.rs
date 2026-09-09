@@ -311,6 +311,17 @@ fn the_tui_never_touches_sqlite_directly() {
 }
 
 #[test]
+fn the_test_only_crates_stay_in_dev_dependencies() {
+    // ADR-0010: assert_cmd и predicates добавлены РАДИ ТЕСТОВ — они запускают
+    // настоящий бинарник и смотрят на код возврата и на потоки вывода.
+    // В рабочих зависимостях им делать нечего: тогда они попадут в сам
+    // бинарник `pressa`, который пользователь ставит себе.
+    //
+    // "outside_dev" = "везде, кроме секции [dev-dependencies]".
+    assert_forbidden_outside_dev("pressa-tui", &["assert_cmd", "predicates"]);
+}
+
+#[test]
 fn a_test_only_dependency_on_storage_is_allowed_but_a_real_one_is_not() {
     // Проверка исключения из ADR-0009 — на выдуманных текстах Cargo.toml,
     // а не на настоящем файле, чтобы тест проверял ПРАВИЛО, а не текущий проект.

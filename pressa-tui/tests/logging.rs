@@ -83,7 +83,10 @@ fn init_creates_the_log_file_and_records_events_in_it() {
     // Включаем (инициализируем) систему логирования для этой временной папки.
     // .expect(...) — если инициализация не удалась, тест сразу упадёт
     // с этим сообщением об ошибке.
-    pressa_tui::logging::init(&project).expect("tracing инициализируется");
+    // Второй аргумент (с T6) — уровень логирования: какие сообщения писать.
+    // LogLevel::Info значит "писать info и всё, что важнее" (warn, error).
+    pressa_tui::logging::init(&project, pressa_tui::cli::LogLevel::Info)
+        .expect("tracing инициализируется");
 
     // Пишем тестовое сообщение в лог через макрос tracing::info!.
     // step = 1 — это "структурированное поле": не просто текст, а ещё и
