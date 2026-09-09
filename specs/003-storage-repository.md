@@ -1,6 +1,6 @@
 # SPEC-003: Storage and the record repository
 
-Status: **Approved** · Task: T4 · Crate: `pressa-storage`
+Status: **Implemented** · Task: T4 · Crate: `pressa-storage`
 · ADRs: [0002](../docs/adr/0002-synchronous-rusqlite.md), [0003](../docs/adr/0003-json-documents-not-eav.md)
 
 ## Problem
@@ -59,23 +59,23 @@ ordering and `Corrupt`.
 
 ## Acceptance criteria
 
-- [ ] A shared contract suite runs against both implementations and passes.
-- [ ] Opening a fresh file creates the schema; opening it again is a no-op.
-- [ ] Opening a database from a future `schema_version` fails with a clear error.
-- [ ] Create → get returns an equal record.
-- [ ] Create assigns a ULID and equal `created_at` / `updated_at`.
-- [ ] Update changes `data` and `updated_at`, preserves `created_at` and `id`.
-- [ ] Update on a missing id → `NotFound`.
-- [ ] Delete removes the record; get then returns `Ok(None)`.
-- [ ] Delete on a missing id → `NotFound`.
-- [ ] List returns only the requested collection.
-- [ ] List honours `limit` and `offset`.
-- [ ] Sort by a field, ascending and descending, is correct and stable across
+- [x] A shared contract suite runs against both implementations and passes.
+- [x] Opening a fresh file creates the schema; opening it again is a no-op.
+- [x] Opening a database from a future `schema_version` fails with a clear error.
+- [x] Create → get returns an equal record.
+- [x] Create assigns a ULID and equal `created_at` / `updated_at`.
+- [x] Update changes `data` and `updated_at`, preserves `created_at` and `id`.
+- [x] Update on a missing id → `NotFound`.
+- [x] Delete removes the record; get then returns `Ok(None)`.
+- [x] Delete on a missing id → `NotFound`.
+- [x] List returns only the requested collection.
+- [x] List honours `limit` and `offset`.
+- [x] Sort by a field, ascending and descending, is correct and stable across
       repeated calls with equal keys.
-- [ ] Search matches case-insensitively across the named fields only.
-- [ ] `find_by_field` returns every match and an empty vector for none.
-- [ ] A corrupt row yields `Corrupt` naming the id.
-- [ ] Data written, connection dropped, database reopened → the data is there.
+- [x] Search matches case-insensitively across the named fields only.
+- [x] `find_by_field` returns every match and an empty vector for none.
+- [x] A corrupt row yields `Corrupt` naming the id.
+- [x] Data written, connection dropped, database reopened → the data is there.
 
 ## Tests
 

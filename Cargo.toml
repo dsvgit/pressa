@@ -16,8 +16,13 @@ indexmap = { version = "2", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 serde_json = "1"
-# Parsing only (RFC 3339); no clock needed, so default features stay off.
-chrono = { version = "0.4", default-features = false, features = ["std"] }
+# RFC 3339 parsing, plus `clock` because storage stamps `created_at`/`updated_at`
+# itself (docs/storage.md §5). No other default features are wanted.
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 thiserror = "2"
+# `RecordId` is a ULID so that `ORDER BY id` is chronological — domain-model.md §7.
+ulid = "3"
+# Synchronous, bundled SQLite — ADR-0002. `bundled` keeps CI free of a system dep.
+rusqlite = { version = "0.32", features = ["bundled"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std"] }

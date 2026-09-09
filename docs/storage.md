@@ -78,8 +78,10 @@ Note the distinction, because it causes confusion: these migrations version the
 pub struct ListParams {
     pub limit: Option<u32>,
     pub offset: Option<u32>,
-    /// Case-insensitive substring match across the collection's list_columns.
+    /// Case-insensitive substring match, applied across `search_fields`.
     pub search: Option<String>,
+    /// The fields `search` looks in — normally the collection's list_columns.
+    pub search_fields: Vec<String>,
     /// Field name; None means order by id (chronological).
     pub sort_by: Option<String>,
     pub sort_direction: SortDirection,
@@ -89,6 +91,11 @@ pub enum SortDirection { Asc, Desc }
 ```
 
 `Default` is: no limit, no offset, no search, sort by id ascending.
+
+`search_fields` is named here rather than derived from the schema because the
+repository has no schema: `list` is handed a collection *slug*, not a
+`Collection`. The caller — `RecordService` — passes the collection's
+`list_columns`. A search with no field named matches nothing.
 
 ### Mapping to SQL
 
@@ -142,7 +149,10 @@ M0 uses `LIKE`. FTS5 is a later optimisation and needs its own ADR.
 
 ### `MemoryRepository`
 
-An in-memory `IndexMap<RecordId, Record>` implementing the same trait. It
+An in-memory `BTreeMap<RecordId, Record>` implementing the same trait. A tree
+rather than the insertion-ordered map first specified here: keys are ULIDs, so
+tree order *is* id order — the default list order — and that holds even for rows
+inserted out of sequence, which insertion order would not. It
 exists so that `pressa-app` and `pressa-tui` tests never open a file, and so
 that a failing service test cannot be blamed on SQL. It must implement the
 *same* semantics, including `NotFound` on missing ids and the same sort order —
@@ -159,13 +169,24 @@ pub enum StorageError {
     NotFound { collection: String, id: String },
     UnknownCollection(String),
     Corrupt { id: String, detail: String },   // stored JSON is not an object
+    InvalidField { field: String },           // would be interpolated into SQL
+    Migration { detail: String },             // schema_version this build cannot read
     Io(String),
-    Sqlite(#[from] rusqlite::Error),
+    Sqlite(String),                           // a backend error, flattened
 }
 ```
 
 `rusqlite::Error` is wrapped, never re-exported: `pressa-app` and `pressa-tui`
-must be able to handle storage failures without depending on rusqlite.
+must be able to handle storage failures without depending on rusqlite. That is
+why `Sqlite` carries a `String` and not `#[from] rusqlite::Error` — the type
+is named in the port's signatures, and the port lives in `pressa-core`, which
+must never know rusqlite exists (`AGENTS.md`, `docs/architecture.md` §1). So the
+enum lives in `pressa-core` alongside the trait that returns it, and the adapter
+flattens its backend errors on the way out.
+
+`InvalidField` is the backstop on the one place a field name reaches SQL by
+interpolation rather than binding (§4). Schema loading rejects such names first;
+storage refuses them again rather than trusting its caller.
 
 ## 7. What we are not doing in M0
 
