@@ -21,6 +21,11 @@ the hint bar and help are built from.
 - Breadcrumbs derived from `Route`, never hand-assembled.
 - The static keymap table; hint bar generated from it by context.
 - `q` at Home quits; `Ctrl+C` always quits.
+- Writing the `collections` config snapshot on startup
+  ([`storage.md`](../docs/storage.md) §2). The migration creates the table and
+  nothing has ever filled it; the coordinator assigned it here on 2026-09-09,
+  because T7 is where "application start" becomes real. It needs an
+  acceptance criterion when this spec is finalised.
 
 Out of scope: the record table (T8), the editor (T9), overlays (T10–T11).
 
