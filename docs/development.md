@@ -142,7 +142,8 @@ keep it honest, and they are part of the definition of done below:
   PR** — the flags it demonstrates, the transcripts its README promises, the
   fixtures it writes. The reviewer runs `just sandbox` and follows its README;
   a promise that no longer holds is a review finding like any other. T7 replacing
-  `dev`'s `the TUI arrives in T7` stub is the first such change due.
+  `dev`'s `the TUI arrives in T7` stub with the event loop was the first such
+  change, and it moved the recipe's `dev` transcript in the same PR.
 
 Run `just hooks` once per clone. It points git at [`.githooks/`](../.githooks),
 whose `pre-commit` runs `rustfmt` over the staged `.rs` files and re-stages

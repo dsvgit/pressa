@@ -14,6 +14,8 @@ use pressa_app::config::{
 use pressa_app::{AppError, CollectionService, RecordService};
 use pressa_storage::SqliteRepository;
 
+use crate::counted;
+
 /// What `pressa init` writes. `include_str!` rather than a copy: the file the
 /// scaffold produces and the Golden Path fixture are then one file and cannot
 /// drift apart (SPEC-005 "API").
@@ -88,9 +90,9 @@ pub enum CliError {
         #[source]
         source: std::io::Error,
     },
-    /// The T6 stub for a screen T7 owns. Removed when the event loop lands.
-    #[error("the TUI arrives in T7")]
-    NotImplementedYet,
+    /// The screen, once it is the output — see `tui::TuiError`.
+    #[error(transparent)]
+    Tui(#[from] crate::tui::TuiError),
 }
 
 /// Runs the parsed command against `cwd`. Returns the process exit code, so
@@ -178,8 +180,7 @@ pub fn validate(paths: &ProjectPaths) -> Result<String, CliError> {
     Ok(summary)
 }
 
-/// `pressa dev`: the whole startup sequence, up to the point where T7 takes
-/// over. Returns `CliError::NotImplementedYet` on success until then.
+/// `pressa dev`: the whole startup sequence, and then the screen.
 ///
 /// This is the composition root: the one place `pressa-storage` is named
 /// outside tests, where a `SqliteRepository` is built and handed to the
@@ -195,13 +196,14 @@ pub fn dev(paths: &ProjectPaths) -> Result<(), CliError> {
     // The schema is cloned because both services own one: they never re-read
     // `pressa.yaml` (SPEC-004).
     let collections = CollectionService::new(schema.clone());
-    // Held until T7 gives it an event loop to serve; built here so that a
-    // failure to construct it surfaces at startup rather than on first keypress.
-    let _records = RecordService::new(repository, schema);
+    // Held until T8 gives the loop an effect runner to serve; built here so a
+    // failure to construct it surfaces before the screen is taken over.
+    let _records = RecordService::new(repository, schema.clone());
 
     tracing::info!(target: "pressa", collections = collections.all().count(), "services ready");
-    tracing::warn!(target: "pressa", "the TUI arrives in T7");
-    Err(CliError::NotImplementedYet)
+    // The last thing that may print: from here on the screen is the output.
+    crate::tui::run(schema)?;
+    Ok(())
 }
 
 /// Resolves the project: `project_at` when `--project` was given,
@@ -231,15 +233,6 @@ fn start_logging(dir: &Path, level: LogLevel) -> Result<(), CliError> {
     crate::logging::init(dir, level)?;
     tracing::info!(target: "pressa", version = %env!("CARGO_PKG_VERSION"), "pressa started");
     Ok(())
-}
-
-/// `1 collection`, `3 collections` — each noun pluralises on its own count.
-fn counted(n: usize, noun: &str) -> String {
-    if n == 1 {
-        format!("{n} {noun}")
-    } else {
-        format!("{n} {noun}s")
-    }
 }
 
 /// The absolute form of `dir` for a message, falling back to what was given:

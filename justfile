@@ -88,7 +88,7 @@ sandbox:
     | Directory | Holds | For |
     |---|---|---|
     | `empty/` | nothing | `init` from scratch |
-    | `blog/` | a copy of `examples/blog/pressa.yaml` | `validate`, `dev`, the log, `data.db` |
+    | `blog/` | a copy of `examples/blog/pressa.yaml` | `validate`, `dev`, the TUI, the log, `data.db` |
     | `broken/` | a schema with `type: relation` | an error naming the YAML path |
     | `deep/` | `pressa.yaml` at the top, empty `a/b/c` | discovery walking up, the way git finds `.git` |
 
@@ -102,24 +102,27 @@ sandbox:
 
         cd blog
         ../pressa validate                    # one line on stdout, exit 0
-        ../pressa dev                         # exit 1: "pressa: the TUI arrives in T7" (until T7)
+        ../pressa dev                         # opens the TUI; q gives the shell back, exit 0
+        ../pressa dev > /dev/null             # not a terminal: exit 1, "could not be prepared"
         ls -a .pressa                         # data.db appears only after `dev`
-        cat .pressa/pressa.log                # started / project resolved / services ready / warn
+        cat .pressa/pressa.log                # started / resolved / services ready / tui started
 
         cd ../broken && ../pressa validate    # exit 1: collections.posts.fields[3].type ...
         cd ../deep/a/b/c && ../../../../pressa validate   # finds the project in deep/
 
     ## Exit codes
 
-        ./pressa validate --project blog; echo $?          # 0
-        ./pressa dev --project blog; echo $?               # 1  every pressa error
-        ./pressa --log-level nonsense validate; echo $?    # 2  clap's usage errors
+        ./pressa validate --project blog; echo $?               # 0
+        ./pressa dev --project blog > /dev/null; echo $?        # 1  every pressa error
+        ./pressa --log-level nonsense validate; echo $?         # 2  clap's usage errors
 
     ## Log level
 
         rm -f blog/.pressa/pressa.log
-        ./pressa --log-level error dev --project blog; wc -c < blog/.pressa/pressa.log   # 0
-        ./pressa dev --project blog;                   wc -c < blog/.pressa/pressa.log   # > 0
+        ./pressa --log-level error dev --project blog > /dev/null
+        wc -c < blog/.pressa/pressa.log   # 0
+        ./pressa dev --project blog > /dev/null
+        wc -c < blog/.pressa/pressa.log   # > 0
 
     ## Start over
 

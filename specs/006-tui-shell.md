@@ -1,6 +1,6 @@
 # SPEC-006: TUI shell
 
-Status: **Approved** · Task: T7 · Crates: `pressa-tui`, `pressa-app` (re-exports only)
+Status: **Implemented** · Task: T7 · Crates: `pressa-tui`, `pressa-app` (re-exports only)
 · ADRs: [0001](../docs/adr/0001-ratatui-and-crossterm.md),
 [0004](../docs/adr/0004-schema-driven-ui.md),
 [0005](../docs/adr/0005-command-and-keymap-architecture.md),
@@ -647,101 +647,110 @@ T8 gives the loop an effect runner.
 
 Terminal lifecycle
 
-- [ ] `TerminalGuard::enter` puts the terminal in raw mode and on the alternate
+- [x] `TerminalGuard::enter` puts the terminal in raw mode and on the alternate
       screen, and dropping it leaves both — asserted through `TerminalOps` on a
       recording double, in order.
-- [ ] A panic inside the scope of a guard restores the terminal exactly once:
+- [x] A panic inside the scope of a guard restores the terminal exactly once:
       `catch_unwind` around a scope holding the guard, then assert the recorder
       saw one `leave`.
-- [ ] `install_panic_hook` calls the previously installed hook after restoring,
+- [x] `install_panic_hook` calls the previously installed hook after restoring,
       so the panic message is not swallowed.
-- [ ] `run` returns `TuiError::Enter` when entering fails, and the process
+- [x] `run` returns `TuiError::Enter` when entering fails, and the process
       prints one line to stderr starting with `pressa: ` and exits 1.
 
 Layout
 
-- [ ] An 80x24 snapshot of Home on `examples/blog/pressa.yaml` matches frame A.
-- [ ] A 60x16 snapshot of the same state matches frame E.
-- [ ] A 79x24 render and an 80x15 render both produce screen G, and 80x16 does
+- [x] An 80x24 snapshot of Home on `examples/blog/pressa.yaml` matches frame A.
+- [x] A 60x16 snapshot of the same state matches frame E.
+- [x] A 79x24 render and an 80x15 render both produce screen G, and 80x16 does
       not — the boundary is asserted on both axes.
-- [ ] Screen G names the actual size: at 40x10 the second line is
+      *Tested at 59x24, not 79x24: frame E draws the whole layout at 60 columns,
+      so the column that breaks the 60-column floor is 59. 60x16 is asserted as
+      not-too-small alongside 80x16.*
+- [x] Screen G names the actual size: at 40x10 the second line is
       `needs 60x16, this is 40x10`.
-- [ ] An 80x24 snapshot of `Route::List { "posts" }` matches frame H, header
+- [x] An 80x24 snapshot of `Route::List { "posts" }` matches frame H, header
       `pressa › Posts` included.
-- [ ] The header is built by `breadcrumbs`, not by string concatenation at the
+- [x] The header is built by `breadcrumbs`, not by string concatenation at the
       call site: a unit test calls it for both routes and asserts the vectors.
-- [ ] `breadcrumbs` on a route naming a collection the schema does not have
+- [x] `breadcrumbs` on a route naming a collection the schema does not have
       returns the slug and does not panic.
 
 Sidebar
 
-- [ ] With three collections, the initial 80x24 snapshot matches frame B and
+- [x] With three collections, the initial 80x24 snapshot matches frame B and
       the snapshot after two `MoveDown` matches frame C.
-- [ ] A third `MoveDown` leaves `sidebar.selected` at 2, and `MoveUp` at the
+- [x] A third `MoveDown` leaves `sidebar.selected` at 2, and `MoveUp` at the
       top leaves it at 0 — clamped, never wrapping.
-- [ ] The selected sidebar row is reverse video at `Route::Home` and is not at
+- [x] The selected sidebar row is reverse video at `Route::Home` and is not at
       `Route::List`, asserted on the buffer's cell styles rather than on the
       text snapshot; the `> ` marker is present in both.
-- [ ] With 20 collections and the selection on the last, the snapshot matches
+- [x] With 20 collections and the selection on the last, the snapshot matches
       frame F: the top list row reads `↑ 6 more` and the selection is visible.
-- [ ] A collection whose label exceeds the sidebar's 17 usable columns is
+- [x] A collection whose label exceeds the sidebar's 17 usable columns is
       truncated with `…` and never overflows into the divider.
-- [ ] The sidebar lists collections in schema order for a schema whose
+- [x] The sidebar lists collections in schema order for a schema whose
       collections are not alphabetical, proving the order comes from the
       `IndexMap` rather than from a sort.
 
 Routing
 
-- [ ] `Select` at Home sets `Route::List` naming the selected collection, and
+- [x] `Select` at Home sets `Route::List` naming the selected collection, and
       returns no effects.
-- [ ] `Back` at `Route::List` returns to `Route::Home` with the sidebar
+- [x] `Back` at `Route::List` returns to `Route::Home` with the sidebar
       selection unchanged.
-- [ ] `Select` routes to whichever collection is selected, asserted for two
+- [x] `Select` routes to whichever collection is selected, asserted for two
       different indices, so no code path names a slug.
 
 Keymap and hints
 
-- [ ] `resolve(Context::Sidebar, k)` returns `MoveDown` for `j` and `↓`,
+- [x] `resolve(Context::Sidebar, k)` returns `MoveDown` for `j` and `↓`,
       `MoveUp` for `k` and `↑`, `Select` for `Enter`, `l` and `→`, and `Quit`
       for `q`.
-- [ ] `resolve(Context::List, k)` returns `Back` for `Esc`, `h`, `←` and `q` —
+- [x] `resolve(Context::List, k)` returns `Back` for `Esc`, `h`, `←` and `q` —
       the same key that quits at Home goes back in a list.
-- [ ] `resolve` returns `Quit` for `Ctrl+C` in both contexts, and `None` for a
+- [x] `resolve` returns `Quit` for `Ctrl+C` in both contexts, and `None` for a
       key in no binding (`z`, and `?` until T11).
-- [ ] `resolve(Context::Sidebar, Char('c'))` is `None` while `Ctrl+C` is
+- [x] `resolve(Context::Sidebar, Char('c'))` is `None` while `Ctrl+C` is
       `Quit` — modifiers are part of the match.
-- [ ] The hint bar rows of frames A and H equal `hints(..)` for their contexts
+- [x] The hint bar rows of frames A and H equal `hints(..)` for their contexts
       joined with three spaces, computed from `KEYMAP` in the test; no test and
       no renderer contains the literal `Navigate`.
-- [ ] For every binding the hint bar shows, `resolve` on that binding's key
+- [x] For every binding the hint bar shows, `resolve` on that binding's key
       returns that binding's command — a hint cannot name a key that does
       nothing.
-- [ ] `grep` finds no `KeyCode::` outside `keymap.rs` — asserted by a test that
+- [x] `grep` finds no `KeyCode::` outside `keymap.rs` — asserted by a test that
       reads the crate's own sources, in the style of
       `pressa-tui/tests/architecture.rs`.
 
 `update`
 
-- [ ] `update` is a pure function: the same state and command produce the same
+- [x] `update` is a pure function: the same state and command produce the same
       state, and the returned `Vec<Effect>` is empty for every T7 command.
-- [ ] `Command::Quit` sets `should_quit`, and the loop exits on the next pass
+- [x] `Command::Quit` sets `should_quit`, and the loop exits on the next pass
       with `Ok(())` and exit code 0.
-- [ ] `Command::MoveDown` on the last collection returns no effects and leaves
+      *The loop half is asserted through `tui::drive`, the loop over an injected
+      terminal and event source; the exit code is `cli::run`'s existing
+      `Ok` → `ExitCode::SUCCESS`, covered by SPEC-005's tests.*
+- [x] `Command::MoveDown` on the last collection returns no effects and leaves
       the state equal to what it was.
 
 Status line
 
-- [ ] `StatusKind::Error` renders `⚠ ` before the text and in red, asserted on
+- [x] `StatusKind::Error` renders `⚠ ` before the text and in red, asserted on
       the cell styles; `StatusKind::Info` renders the text with neither.
-- [ ] The 80x24 snapshot of Home with an error status matches frame D.
+- [x] The 80x24 snapshot of Home with an error status matches frame D.
 
 Startup and the CLI
 
-- [ ] `pressa dev` on `examples/blog` no longer prints `the TUI arrives in T7`,
+- [x] `pressa dev` on `examples/blog` no longer prints `the TUI arrives in T7`,
       and `CliError::NotImplementedYet` no longer exists.
-- [ ] `.pressa/pressa.log` gains a line when the loop starts and one when it
+- [x] `.pressa/pressa.log` gains a line when the loop starts and one when it
       exits cleanly; nothing is written to stdout or stderr on the success path.
-- [ ] The `sandbox` recipe in the `justfile` no longer promises
+      *The two log lines are asserted. The silent success path is not: observing
+      it needs a pty, which "Non-goals" rules out. Nothing in the crate writes to
+      either stream outside `cli.rs`, which runs before the guard.*
+- [x] The `sandbox` recipe in the `justfile` no longer promises
       `pressa: the TUI arrives in T7`, and its README says what `dev` does now
       (`AGENTS.md`, [`development.md`](../docs/development.md) §8).
 
@@ -754,23 +763,23 @@ The approval PR already carried the edits the six answers implied:
 [`architecture.md`](../docs/architecture.md) §2 on `pressa_app::domain` and
 `insta` (Q1, Q2). What is left belongs with the code that changes:
 
-- [ ] [005](005-cli.md): screen I and the two criteria asserting
+- [x] [005](005-cli.md): screen I and the two criteria asserting
       `the TUI arrives in T7` are marked superseded by this spec.
 
 Boundaries
 
-- [ ] `pressa-tui/Cargo.toml` gains `ratatui` and `crossterm` as its only new
+- [x] `pressa-tui/Cargo.toml` gains `ratatui` and `crossterm` as its only new
       runtime dependencies ([ADR-0001](../docs/adr/0001-ratatui-and-crossterm.md))
       and `insta` as its only new dev-dependency (ADR-0011); `pressa-core`,
       `pressa-storage` and `pressa-app` gain no dependency at all.
-- [ ] `pressa-tui` names no crate but `pressa-app` outside `cli::dev`: the
+- [x] `pressa-tui` names no crate but `pressa-app` outside `cli::dev`: the
       domain types reach it through `pressa_app::domain`, and `pressa-core` is
       absent from its `Cargo.toml` in every section.
-- [ ] `pressa-tui/tests/architecture.rs` gains `pressa-core` to `pressa-tui`'s
+- [x] `pressa-tui/tests/architecture.rs` gains `pressa-core` to `pressa-tui`'s
       forbidden list, matching [`architecture.md`](../docs/architecture.md) §2,
       and `rusqlite` is still absent from every section.
-- [ ] No `unwrap()`, `expect()` or `panic!()` outside `#[cfg(test)]`.
-- [ ] No identifier in `pressa-tui` is a collection slug
+- [x] No `unwrap()`, `expect()` or `panic!()` outside `#[cfg(test)]`.
+- [x] No identifier in `pressa-tui` is a collection slug
       ([ADR-0004](../docs/adr/0004-schema-driven-ui.md)).
 
 ## Tests
