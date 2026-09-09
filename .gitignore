@@ -15,3 +15,6 @@ Cargo.lock.orig
 
 # Personal Claude Code overrides (project settings.json IS committed)
 .claude/settings.local.json
+
+# Local scratch notes (assessments, drafts) — not for the repo
+notes/local/

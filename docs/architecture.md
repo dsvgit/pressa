@@ -48,7 +48,7 @@ human doesn't have to.** See [ADR-0006](adr/0006-workspace-of-four-crates.md).
 | `pressa-core` | `Schema`, `Collection`, `Field`, `FieldType`, `Value`, `Record`, validation, `RecordRepository` trait, `ListParams`, domain errors including `StorageError` | `serde`, `serde_json`, `thiserror`, `chrono`, `ulid`, `indexmap` | ratatui, crossterm, rusqlite, clap, tokio |
 | `pressa-storage` | `SqliteRepository`, `MemoryRepository`, migration runner | `pressa-core`, `rusqlite`, `serde_json`, `chrono` | ratatui, crossterm, clap |
 | `pressa-app` | `RecordService`, `CollectionService`, config loading, `AppError` | `pressa-core`, `serde`, `serde_yaml`, `serde_json`, `indexmap`, `thiserror` | ratatui, crossterm, rusqlite, pressa-storage (outside `[dev-dependencies]` — [ADR-0009](adr/0009-test-only-dependency-on-pressa-storage.md)) |
-| `pressa-tui` | binary `pressa`: clap CLI, terminal lifecycle, `AppState`, `Command`, keymap, screens, widgets, tracing setup | `pressa-app`, `pressa-storage` (wiring only, in `main.rs`), `ratatui`, `crossterm`, `clap`, `thiserror`, `tracing`, `tracing-subscriber` | — |
+| `pressa-tui` | binary `pressa`: clap CLI, terminal lifecycle, `AppState`, `Command`, keymap, screens, widgets, tracing setup | `pressa-app`, `pressa-storage` (wiring only, in `main.rs`), `ratatui`, `crossterm`, `clap`, `thiserror`, `tracing`, `tracing-subscriber`; `assert_cmd` and `predicates` in `[dev-dependencies]` ([ADR-0010](adr/0010-test-only-dependencies-need-an-adr.md)) | rusqlite |
 
 `pressa-tui` is allowed to name `pressa-storage` in exactly one place: the
 composition root in `main.rs`, where a `SqliteRepository` is constructed and
@@ -74,6 +74,15 @@ its service tests need an implementation of the `RecordRepository` port, and
 ([ADR-0009](adr/0009-test-only-dependency-on-pressa-storage.md)). `rusqlite`
 stays forbidden to `pressa-app` in every section, dev included — that is the
 rule this exception leaves intact, and `tests/architecture.rs` enforces both.
+
+`pressa-tui` names `assert_cmd` and `predicates` in `[dev-dependencies]` and
+nowhere else: SPEC-005's criteria are about a real process's exit code and its
+stdout/stderr split, which only a spawned binary can show
+([ADR-0010](adr/0010-test-only-dependencies-need-an-adr.md)). That ADR also
+settles the general question — a test-only crate needs an ADR like any other,
+judged on what its tests print when they fail. Unlike ADR-0009 this relaxes no
+rule, so `tests/architecture.rs` is unchanged: `pressa-tui`'s only forbidden
+dependency is `rusqlite`, in every section.
 
 ## 3. Data flow
 
@@ -163,3 +172,5 @@ sit.
 - [ADR-0006](adr/0006-workspace-of-four-crates.md) — workspace of four crates
 - [ADR-0007](adr/0007-vertical-slice-first.md) — vertical slice before breadth
 - [ADR-0008](adr/0008-tracing-to-a-log-file.md) — diagnostics to `.pressa/pressa.log`
+- [ADR-0009](adr/0009-test-only-dependency-on-pressa-storage.md) — `pressa-app` may reach storage in tests
+- [ADR-0010](adr/0010-test-only-dependencies-need-an-adr.md) — test-only dependencies need an ADR too
