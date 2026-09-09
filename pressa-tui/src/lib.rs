@@ -4,4 +4,5 @@
 //! It lives as a library so that integration tests can drive `update()`
 //! directly — see [SPEC-000](../../specs/000-m0-golden-path.md).
 
+pub mod cli;
 pub mod logging;

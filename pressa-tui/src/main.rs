@@ -1,22 +1,38 @@
 //! The `pressa` binary and the workspace's composition root.
 //!
-//! The clap CLI arrives in T6 ([SPEC-005](../../specs/005-cli.md)) and the
-//! event loop in T7. What the skeleton owes is the one thing everything else
-//! depends on: logging, started before anything can fail.
+//! A shim: parse argv, find the working directory, hand both to
+//! [`pressa_tui::cli::run`] ([SPEC-005](../../specs/005-cli.md)). Everything
+//! testable lives in the library half, so `main` has nothing to test.
 
-use std::path::Path;
 use std::process::ExitCode;
 
+use clap::Parser;
+
+use pressa_tui::cli::{self, Cli};
+
 fn main() -> ExitCode {
-    // Upward discovery of `pressa.yaml` lands in T2; until then the project is
-    // the working directory.
-    let project_dir = Path::new(".");
+    // `try_parse` rather than `parse`: clap's own `parse` calls
+    // `process::exit`, which skips destructors. The exit code is clap's — 2 for
+    // a usage error, 0 for `--help` and `--version`.
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) => {
+            // clap writes help to stdout and usage errors to stderr itself.
+            let _ = error.print();
+            // `exit_code` is an i32; clap only ever returns 0 or 2 here.
+            return ExitCode::from(error.exit_code() as u8);
+        }
+    };
 
-    if let Err(error) = pressa_tui::logging::init(project_dir) {
-        eprintln!("pressa: {error}");
-        return ExitCode::FAILURE;
-    }
+    // Read once and passed down, so nothing below reaches for process-global
+    // state and every function stays testable against a temporary directory.
+    let cwd = match std::env::current_dir() {
+        Ok(cwd) => cwd,
+        Err(error) => {
+            eprintln!("pressa: could not read the working directory: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
 
-    tracing::info!(version = env!("CARGO_PKG_VERSION"), "pressa started");
-    ExitCode::SUCCESS
+    cli::run(cli, &cwd)
 }

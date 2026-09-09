@@ -10,6 +10,8 @@ use std::sync::Mutex;
 
 use thiserror::Error;
 
+use crate::cli::LogLevel;
+
 /// The project-local directory holding everything pressa generates.
 const DATA_DIR: &str = ".pressa";
 const LOG_FILE: &str = "pressa.log";
@@ -40,8 +42,9 @@ pub fn log_path(project_dir: &Path) -> PathBuf {
 /// Send `tracing` output to the project's log file, creating `.pressa/` if it
 /// is not there yet. Appends, so a run never discards the previous one.
 ///
-/// Fails if called twice: the subscriber is process-global.
-pub fn init(project_dir: &Path) -> Result<(), LogError> {
+/// `level` is the subscriber's maximum: an event above it never reaches the
+/// file. Fails if called twice: the subscriber is process-global.
+pub fn init(project_dir: &Path, level: LogLevel) -> Result<(), LogError> {
     let dir = project_dir.join(DATA_DIR);
     fs::create_dir_all(&dir).map_err(|source| LogError::CreateDir {
         path: dir.clone(),
@@ -59,8 +62,22 @@ pub fn init(project_dir: &Path) -> Result<(), LogError> {
         })?;
 
     let subscriber = tracing_subscriber::fmt()
+        // `Mutex` because several threads may log into the one file handle.
         .with_writer(Mutex::new(file))
+        .with_max_level(max_level(level))
         .finish();
 
     tracing::subscriber::set_global_default(subscriber).map_err(|_| LogError::AlreadyInitialised)
+}
+
+/// `--log-level` as the subscriber understands it. Kept here so `tracing` stays
+/// out of the CLI's public surface (SPEC-005 "Domain model").
+fn max_level(level: LogLevel) -> tracing::Level {
+    match level {
+        LogLevel::Trace => tracing::Level::TRACE,
+        LogLevel::Debug => tracing::Level::DEBUG,
+        LogLevel::Info => tracing::Level::INFO,
+        LogLevel::Warn => tracing::Level::WARN,
+        LogLevel::Error => tracing::Level::ERROR,
+    }
 }

@@ -25,4 +25,11 @@ ulid = "3"
 # Synchronous, bundled SQLite — ADR-0002. `bundled` keeps CI free of a system dep.
 rusqlite = { version = "0.32", features = ["bundled"] }
 tracing = "0.1"
+# Argument parsing for the `pressa` binary (SPEC-005). `derive` builds the
+# `Cli` struct from attributes instead of a hand-written builder.
+clap = { version = "4", features = ["derive"] }
+# Test-only, and only in `pressa-tui` — ADR-0010. Spawning the real binary is
+# the only way to observe an exit code and the stdout/stderr split.
+assert_cmd = "2"
+predicates = "3"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std"] }
