@@ -189,9 +189,9 @@ fn not_found(collection: &str, id: &RecordId) -> AppError {
 fn from_storage(error: StorageError) -> AppError {
     match error {
         StorageError::NotFound { collection, id } => AppError::NotFound { collection, id },
-        // Cannot happen — the slug was resolved first — but translating it costs
-        // one arm and keeps the two vocabularies from leaking into each other.
-        StorageError::UnknownCollection(slug) => AppError::UnknownCollection(slug),
+        // Everything else keeps its own vocabulary. `StorageError::UnknownCollection`
+        // is deliberately not translated: no adapter ever constructs it, so an arm
+        // for it would be a branch no test could reach.
         other => AppError::Storage(other),
     }
 }

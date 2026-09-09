@@ -20,5 +20,3 @@ thiserror.workspace = true
 # tests and `SqliteRepository` for the integration test, both required by
 # `specs/004`. `rusqlite` stays forbidden to this crate in every section.
 pressa-storage.workspace = true
-# `Record`'s timestamps, for the stub records the recording repository returns.
-chrono.workspace = true

@@ -155,7 +155,9 @@ impl CallLog {
 /// A repository that records the calls made to it and stores nothing.
 ///
 /// It exists for the "never reaches the repository" criteria of SPEC-004: a
-/// service that resolves the collection first must leave this untouched.
+/// service that resolves the collection first must leave this untouched. Every
+/// test using it asserts the call log is *empty*, so no method below is ever
+/// expected to run — they are here because the port requires them.
 #[derive(Debug)]
 pub struct RecordingRepository {
     log: CallLog,
@@ -170,16 +172,10 @@ impl RecordingRepository {
         self.log.push(name);
     }
 
-    /// A record to hand back from `create`/`update`, which must return one.
-    fn stub(collection: &str, data: Json) -> Record {
-        let at = chrono::Utc::now();
-        Record {
-            id: RecordId::new(),
-            collection: collection.to_string(),
-            data,
-            created_at: at,
-            updated_at: at,
-        }
+    /// What `create`/`update` fail with. The variant is arbitrary — no test
+    /// reaches it — but the message names the reason if one ever does.
+    fn stores_nothing() -> StorageError {
+        StorageError::Io("RecordingRepository stores nothing".to_string())
     }
 }
 
@@ -199,14 +195,22 @@ impl RecordRepository for RecordingRepository {
         Ok(None)
     }
 
-    fn create(&self, collection: &str, data: Json) -> Result<Record, StorageError> {
+    // The call is logged first, so a test that expected no write still sees the
+    // method name. The error is only what a `Record`-returning signature has to
+    // hand back: this repository stores nothing, so it has no record to return.
+    fn create(&self, _collection: &str, _data: Json) -> Result<Record, StorageError> {
         self.record("create");
-        Ok(RecordingRepository::stub(collection, data))
+        Err(RecordingRepository::stores_nothing())
     }
 
-    fn update(&self, collection: &str, _id: &RecordId, data: Json) -> Result<Record, StorageError> {
+    fn update(
+        &self,
+        _collection: &str,
+        _id: &RecordId,
+        _data: Json,
+    ) -> Result<Record, StorageError> {
         self.record("update");
-        Ok(RecordingRepository::stub(collection, data))
+        Err(RecordingRepository::stores_nothing())
     }
 
     fn delete(&self, _collection: &str, _id: &RecordId) -> Result<(), StorageError> {
