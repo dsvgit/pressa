@@ -202,17 +202,18 @@ fn an_unknown_log_level_is_a_usage_error() {
     assert_eq!(error.kind(), clap::error::ErrorKind::InvalidValue);
 
     // A usage error exits 2, and the schema is never reached: the run happens
-    // inside a valid project and still prints clap's message, not ours.
+    // inside a valid project and still prints clap's message, not ours. The
+    // summary would go to *stdout*, so an empty stdout is what proves the
+    // schema was never loaded — checking stderr for it could never fail.
     let tree = TempTree::new("bad-level");
     tree.write("pressa.yaml", &example_yaml());
-    let assert = pressa(tree.root())
+    pressa(tree.root())
         .args(["--log-level", "nonsense", "validate"])
         .assert()
         .failure()
         .code(2)
+        .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains("nonsense"));
-    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
-    assert!(!stderr.contains("schema ok"), "stderr was: {stderr}");
 }
 
 #[test]
@@ -460,11 +461,12 @@ fn dev_does_every_startup_step_and_then_stops_at_the_screen() {
     // The database was created and migrated on the way.
     let database = tree.root().join(".pressa").join("data.db");
     assert!(database.is_file(), "dev creates the database");
-    // Opened through the storage adapter, which runs the migration check: a
-    // file this accepts is one the app can work with. The tables are then
-    // looked for in the file itself, because listing records would mean naming
-    // `pressa-core` types, and `pressa-tui` has no such dependency (ADR-0006).
-    pressa_storage::SqliteRepository::open(&database).expect("the database opens and migrates");
+    // Read *before* the adapter is opened below: `SqliteRepository::open` runs
+    // the migrations itself, so opening first would migrate the very file this
+    // is meant to inspect and the assertion would hold even if `dev` had left
+    // an empty database behind. The tables are looked for in the bytes because
+    // listing records would mean naming `pressa-core` types, and `pressa-tui`
+    // has no such dependency (ADR-0006).
     let bytes = fs::read(&database).expect("the database is readable");
     for table in ["records", "collections", "meta", "schema_version"] {
         assert!(
@@ -474,6 +476,9 @@ fn dev_does_every_startup_step_and_then_stops_at_the_screen() {
             "the migrated schema mentions {table}"
         );
     }
+    // Only now: the adapter accepts the file `dev` left, which is the other
+    // half of "migrated" — the right tables at the version the app expects.
+    pressa_storage::SqliteRepository::open(&database).expect("the database opens and migrates");
 
     // And the log says the services were built before the stub gave up.
     let log = log_of(tree.root());

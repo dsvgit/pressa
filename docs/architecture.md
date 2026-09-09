@@ -48,11 +48,19 @@ human doesn't have to.** See [ADR-0006](adr/0006-workspace-of-four-crates.md).
 | `pressa-core` | `Schema`, `Collection`, `Field`, `FieldType`, `Value`, `Record`, validation, `RecordRepository` trait, `ListParams`, domain errors including `StorageError` | `serde`, `serde_json`, `thiserror`, `chrono`, `ulid`, `indexmap` | ratatui, crossterm, rusqlite, clap, tokio |
 | `pressa-storage` | `SqliteRepository`, `MemoryRepository`, migration runner | `pressa-core`, `rusqlite`, `serde_json`, `chrono` | ratatui, crossterm, clap |
 | `pressa-app` | `RecordService`, `CollectionService`, config loading, `AppError` | `pressa-core`, `serde`, `serde_yaml`, `serde_json`, `indexmap`, `thiserror` | ratatui, crossterm, rusqlite, pressa-storage (outside `[dev-dependencies]` — [ADR-0009](adr/0009-test-only-dependency-on-pressa-storage.md)) |
-| `pressa-tui` | binary `pressa`: clap CLI, terminal lifecycle, `AppState`, `Command`, keymap, screens, widgets, tracing setup | `pressa-app`, `pressa-storage` (wiring only, in `main.rs`), `ratatui`, `crossterm`, `clap`, `thiserror`, `tracing`, `tracing-subscriber`; `assert_cmd` and `predicates` in `[dev-dependencies]` ([ADR-0010](adr/0010-test-only-dependencies-need-an-adr.md)) | rusqlite |
+| `pressa-tui` | binary `pressa`: clap CLI, terminal lifecycle, `AppState`, `Command`, keymap, screens, widgets, tracing setup | `pressa-app`, `pressa-storage` (wiring only, in `cli.rs`'s startup sequence), `ratatui`, `crossterm`, `clap`, `thiserror`, `tracing`, `tracing-subscriber`; `assert_cmd` and `predicates` in `[dev-dependencies]` ([ADR-0010](adr/0010-test-only-dependencies-need-an-adr.md)) | rusqlite |
 
 `pressa-tui` is allowed to name `pressa-storage` in exactly one place: the
-composition root in `main.rs`, where a `SqliteRepository` is constructed and
-handed to the services. Everywhere else it sees only `pressa-app` types.
+composition root, where a `SqliteRepository` is constructed and handed to the
+services. Everywhere else it sees only `pressa-app` types.
+
+Since T6 that place is `cli::dev` in [`cli.rs`](../pressa-tui/src/cli.rs), not
+`main.rs`. `main.rs` is a shim — parse argv, read the working directory, call
+`cli::run` — because a `main` cannot be called from a test, and SPEC-005 asks
+for every path through the CLI to be exercised in-process
+([SPEC-005](../specs/005-cli.md) "API"). The rule the boundary is there for is
+unchanged: exactly one function names a storage type, and nothing above it
+sees one.
 
 `StorageError` lives in `pressa-core`, not in `pressa-storage`, even though only
 storage ever raises it: the `RecordRepository` port returns it, and a port in
@@ -89,15 +97,21 @@ dependency is `rusqlite`, in every section.
 ### 3.1 Startup
 
 ```
-main.rs
-  → clap parses argv
-  → tracing subscriber → .pressa/pressa.log   (never stdout: the TUI owns it)
-  → load pressa.yaml            → Schema          (pressa-app)
-  → open .pressa/data.db, run migrations         (pressa-storage)
-  → build RecordService / CollectionService      (pressa-app)
-  → enter terminal raw mode + alternate screen
-  → run event loop
+main.rs                                          ← a shim, nothing else
+  → clap parses argv                             (pressa-tui: cli.rs)
+  → cli::run
+      → resolve the project: --project or walk up  (pressa-app)
+      → tracing subscriber → .pressa/pressa.log  (never stdout: the TUI owns it)
+      → cli::dev
+          → load pressa.yaml        → Schema      (pressa-app)
+          → open .pressa/data.db, run migrations  (pressa-storage)
+          → build RecordService / CollectionService (pressa-app)
+          → enter terminal raw mode + alternate screen
+          → run event loop
 ```
+
+The last two steps are T7's; until then `cli::dev` stops after the services and
+returns `CliError::NotImplementedYet` ([SPEC-005](../specs/005-cli.md) screen I).
 
 ### 3.2 The loop
 

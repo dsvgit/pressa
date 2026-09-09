@@ -70,14 +70,16 @@ pub enum CliError {
     Config(#[from] ConfigError),
     #[error(transparent)]
     Log(#[from] crate::logging::LogError),
-    /// Carried as `AppError` rather than as
-    /// `pressa_core::repository::StorageError`: naming that type would add a
-    /// `pressa-core` dependency edge to `pressa-tui`, which ADR-0006 makes an
-    /// ADR-sized decision and SPEC-005 forbids ("clap as its only new runtime
-    /// dependency"). `AppError` is transparent over it, so the message the user
-    /// reads is the storage error's own.
+    /// Anything the services or the repository raise. Named after the type it
+    /// carries rather than after `dev`'s only current source of one: SPEC-005
+    /// wrote this variant as `Storage(StorageError)`, but naming
+    /// `pressa_core::repository::StorageError` would add a `pressa-core`
+    /// dependency edge to `pressa-tui`, which ADR-0006 makes an ADR-sized
+    /// decision and SPEC-005 itself forbids ("clap as its only new runtime
+    /// dependency"). `AppError` is `#[error(transparent)]` over `StorageError`,
+    /// so the message the user reads is unchanged.
     #[error(transparent)]
-    Storage(#[from] AppError),
+    App(#[from] AppError),
     #[error("pressa.yaml already exists in {}", .0.display())]
     AlreadyInitialised(PathBuf),
     #[error("could not create {}", path.display())]
