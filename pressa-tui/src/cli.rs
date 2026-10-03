@@ -196,13 +196,12 @@ pub fn dev(paths: &ProjectPaths) -> Result<(), CliError> {
     // The schema is cloned because both services own one: they never re-read
     // `pressa.yaml` (SPEC-004).
     let collections = CollectionService::new(schema.clone());
-    // Held until T8 gives the loop an effect runner to serve; built here so a
-    // failure to construct it surfaces before the screen is taken over.
-    let _records = RecordService::new(repository, schema.clone());
+    let records = RecordService::new(repository, schema.clone());
 
     tracing::info!(target: "pressa", collections = collections.all().count(), "services ready");
     // The last thing that may print: from here on the screen is the output.
-    crate::tui::run(schema)?;
+    // The loop serves its own effects out of this service (SPEC-007 "API").
+    crate::tui::run(schema, records)?;
     Ok(())
 }
 

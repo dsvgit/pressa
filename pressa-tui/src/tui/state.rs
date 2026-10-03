@@ -1,10 +1,10 @@
 //! The whole of what a screen can read: [`AppState`] and the small types it is
 //! made of ([SPEC-006](../../../specs/006-tui-shell.md) "Domain model").
 //!
-//! `list`, `editor` and `overlay` from `docs/tui.md` §1 are deliberately absent:
-//! a field arrives with the task that renders it.
+//! `editor` and `overlay` from `docs/tui.md` §1 are deliberately absent: a
+//! field arrives with the task that renders it.
 
-use pressa_app::domain::{Collection, Schema};
+use pressa_app::domain::{Collection, Record, Schema};
 
 /// Everything the UI knows. `view` gets this and nothing else, and `update` is
 /// the only function that changes it.
@@ -13,6 +13,7 @@ pub struct AppState {
     pub schema: Schema,
     pub route: Route,
     pub sidebar: SidebarState,
+    pub list: ListState,
     pub status: Option<StatusMessage>,
     pub should_quit: bool,
 }
@@ -23,6 +24,30 @@ pub struct AppState {
 pub enum Route {
     Home,
     List { collection: String },
+}
+
+/// The records of the collection the route names, and where we are in them.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ListState {
+    pub records: Vec<Record>,
+    /// Index into `records`. 0 when there are none.
+    pub selected: usize,
+    /// The row the table would like to start at; `view` clamps it rather than
+    /// mutating it, as the sidebar's already does.
+    pub offset: usize,
+    pub load: Load,
+}
+
+/// Whether the records in [`ListState`] are the collection's or the remains of
+/// a load that failed.
+///
+/// Two variants and not three: effects are synchronous (ADR-0002), so the queue
+/// drains before the next draw and a `Loading` body is unobservable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Load {
+    #[default]
+    Ok,
+    Failed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -55,6 +80,7 @@ impl AppState {
             schema,
             route: Route::Home,
             sidebar: SidebarState::default(),
+            list: ListState::default(),
             status: None,
             should_quit: false,
         }

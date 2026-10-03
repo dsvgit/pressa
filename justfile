@@ -107,6 +107,26 @@ sandbox:
         ls -a .pressa                         # data.db appears only after `dev`
         cat .pressa/pressa.log                # started / resolved / services ready / tui started
 
+    ## The list view
+
+    `Enter` on `Posts` loads the collection and draws its table. A fresh
+    `data.db` has no records in it, so what you see is the empty list:
+
+        ┌ pressa › Posts ──────────────────────────────────── 0 records ───┐
+        │ Collections   │  TITLE          STATUS         VIEWS            │
+        │               │ ──────────────────────────────────────────────  │
+        │ > Posts       │                                                │
+        │               │   No records yet.                              │
+        │ ↑↓ Navigate   Esc Back                                         │
+
+    The header row is `list_columns` from `pressa.yaml`, uppercased — edit
+    that list and the columns change with it, with no code change. The title
+    counts what loaded. In the list: `j`/`k` or `↑`/`↓` move, `g`/`G` jump to
+    the ends, `Ctrl+D`/`Ctrl+U` move by ten, `r` reloads, `Esc`/`h`/`←`/`q`
+    goes back. Nothing creates a record yet — that is the editor, T9 — so the
+    table with rows in it is covered by the snapshots in
+    `pressa-tui/tests/snapshots/` rather than here.
+
         cd ../broken && ../pressa validate    # exit 1: collections.posts.fields[3].type ...
         cd ../deep/a/b/c && ../../../../pressa validate   # finds the project in deep/
 

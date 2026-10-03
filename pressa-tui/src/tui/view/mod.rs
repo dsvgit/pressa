@@ -9,10 +9,11 @@ use pressa_app::domain::Schema;
 
 use crate::counted;
 use crate::tui::keymap::context_for;
-use crate::tui::state::{AppState, Route, collection_label};
+use crate::tui::state::{AppState, Load, Route, collection_label};
 
 pub mod chrome;
 pub mod sidebar;
+pub mod table;
 
 /// The smallest terminal that still gets a layout; below it, screen G.
 pub const MIN_WIDTH: u16 = 60;
@@ -22,6 +23,46 @@ pub const MIN_HEIGHT: u16 = 16;
 pub const SIDEBAR_WIDTH: u16 = 20;
 /// The root of every breadcrumb trail.
 const ROOT_CRUMB: &str = "pressa";
+
+/// The first row a windowed list shows.
+///
+/// `offset` is what the state remembers; a list's height is only known while
+/// drawing, so this clamps rather than mutates and `view` stays pure. Shared:
+/// the table windows its records the way the sidebar windows its collections.
+pub fn window(offset: usize, selected: usize, len: usize, height: usize) -> usize {
+    if height == 0 {
+        return 0;
+    }
+
+    // Never scroll past the point where the last row is on the bottom line, or
+    // the list would end in blanks with content hidden above.
+    let furthest = len.saturating_sub(height);
+    let mut first = offset.min(furthest);
+
+    if selected < first {
+        first = selected; // the selection went off the top
+    }
+    if selected >= first + height {
+        first = selected + 1 - height; // and off the bottom
+    }
+
+    first
+}
+
+/// `text` in at most `width` columns, ending in `…` when it does not fit.
+///
+/// Shared for the same reason as [`window`]: a cell too wide for its column and
+/// a label too wide for the sidebar are cut the same way.
+pub fn truncate(text: &str, width: usize) -> String {
+    // By characters, not bytes: a label or a cell may be more than ASCII.
+    if text.chars().count() <= width {
+        return text.to_string();
+    }
+
+    // One column goes to the ellipsis that says there was more.
+    let kept: String = text.chars().take(width.saturating_sub(1)).collect();
+    format!("{kept}…")
+}
 
 /// The four regions every screen draws into.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,7 +117,8 @@ pub fn view(state: &AppState, frame: &mut Frame) {
     }
 
     let title = format!(" {} ", breadcrumbs(&state.route, &state.schema).join(" › "));
-    chrome::shell(frame, area, &title);
+    // `as_deref` hands `shell` a `&str` without moving the `String` it owns.
+    chrome::shell(frame, area, &title, record_count(state).as_deref());
 
     let panels = layout(area);
     sidebar::render(frame, panels.sidebar, state);
@@ -85,21 +127,41 @@ pub fn view(state: &AppState, frame: &mut Frame) {
     chrome::hint_bar(frame, panels.hints, context_for(&state.route));
 }
 
-/// The panel every later screen fills. T7 draws the empty state and, on a
-/// route T8 owns, says whose it is.
+/// The count the window title carries, if any.
+///
+/// Omitted unless we are in a list whose load succeeded: the title must not
+/// report 0 records for a collection whose contents are unknown (frame G).
+fn record_count(state: &AppState) -> Option<String> {
+    match (&state.route, state.list.load) {
+        (Route::List { .. }, Load::Ok) => {
+            Some(format!(" {} ", counted(state.list.records.len(), "record")))
+        }
+        _ => None,
+    }
+}
+
+/// The panel every later screen fills: the empty state at Home, the table in a
+/// list.
 fn main_panel(frame: &mut Frame, area: Rect, state: &AppState) {
-    let lines = match state.route {
-        Route::Home => vec![
-            Line::from("Select a collection to begin."),
-            Line::from(""),
-            Line::from(format!(
-                "{} · {}",
-                state.schema.project.name,
-                counted(state.schema.collections.len(), "collection")
-            )),
-        ],
-        Route::List { .. } => vec![Line::from("The list view arrives in T8.")],
-    };
+    // A `Route::List` naming a collection the schema does not know falls
+    // through to the Home body rather than panicking — a stale route is
+    // visible, as the breadcrumbs already make it.
+    if let Route::List { collection } = &state.route {
+        if let Some(collection) = state.schema.collections.get(collection) {
+            table::render(frame, area, state, collection);
+            return;
+        }
+    }
+
+    let lines = vec![
+        Line::from("Select a collection to begin."),
+        Line::from(""),
+        Line::from(format!(
+            "{} · {}",
+            state.schema.project.name,
+            counted(state.schema.collections.len(), "collection")
+        )),
+    ];
 
     centred(frame, area, lines);
 }
@@ -119,4 +181,47 @@ pub fn centred(frame: &mut Frame, area: Rect, lines: Vec<Line>) {
         height,
     );
     frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), block);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // `window`'s own tests, moved here with it from `view::sidebar`: the table
+    // and the sidebar now share the function, so they share these.
+
+    #[test]
+    fn a_list_that_fits_never_scrolls() {
+        assert_eq!(window(0, 4, 5, 15), 0);
+    }
+
+    #[test]
+    fn the_window_follows_the_selection_down() {
+        // Twenty rows in fifteen, selection on the last: the first visible row
+        // is 5, leaving six above it to be summarised.
+        assert_eq!(window(0, 19, 20, 15), 5);
+    }
+
+    #[test]
+    fn the_window_follows_the_selection_up() {
+        assert_eq!(window(10, 3, 20, 15), 3);
+    }
+
+    #[test]
+    fn the_window_never_runs_past_the_end() {
+        assert_eq!(window(18, 19, 20, 15), 5);
+    }
+
+    #[test]
+    fn a_zero_height_list_asks_for_nothing() {
+        assert_eq!(window(0, 0, 20, 0), 0);
+    }
+
+    #[test]
+    fn text_that_fits_is_left_alone_and_text_that_does_not_ends_in_an_ellipsis() {
+        assert_eq!(truncate("draft", 6), "draft");
+        assert_eq!(truncate("published", 6), "publi…");
+        // By characters, not bytes: `…` is three bytes and one column.
+        assert_eq!(truncate("ünïcödé", 4).chars().count(), 4);
+    }
 }

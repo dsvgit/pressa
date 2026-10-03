@@ -1,6 +1,6 @@
 # SPEC-007: List view
 
-Status: **Approved** · Task: T8 · Crates: `pressa-tui`, `pressa-app` (re-exports
+Status: **Implemented** · Task: T8 · Crates: `pressa-tui`, `pressa-app` (re-exports
 only) · ADRs: [0002](../docs/adr/0002-synchronous-rusqlite.md),
 [0004](../docs/adr/0004-schema-driven-ui.md),
 [0005](../docs/adr/0005-command-and-keymap-architecture.md),
