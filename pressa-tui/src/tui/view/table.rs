@@ -464,14 +464,40 @@ fn notice(frame: &mut Frame, area: Rect, load: Load) {
         Load::Failed => FAILED,
     };
     // Three rows in: the header, the rule, and the blank row under it.
-    let y = area.y + HEADER_ROWS + 1;
-    if y >= area.bottom() {
-        return;
+    let top = area.y + HEADER_ROWS + 1;
+    // What the panel leaves after the indent and the right gutter. Measured so
+    // the sentence can never write over the window's border.
+    let room = area.width.saturating_sub(BODY_INDENT + 1) as usize;
+
+    for (offset, line) in notice_lines(text, room).iter().enumerate() {
+        // `as u16` is safe: a notice is at most two lines long.
+        let y = top + offset as u16;
+        if y >= area.bottom() {
+            return;
+        }
+        frame
+            .buffer_mut()
+            .set_string(area.x + BODY_INDENT, y, line, Style::new());
+    }
+}
+
+/// A notice laid out in the room the panel has for it.
+///
+/// One line when it fits, which is what frames A and G show at 80x24. When it
+/// does not — the failure sentence is 42 characters and a 60-column terminal
+/// leaves 33 — it breaks at the double space between its two sentences, so the
+/// key that retries is still named rather than clipped off the edge
+/// (`docs/tui.md` §6: nothing is clipped silently).
+fn notice_lines(text: &str, room: usize) -> Vec<String> {
+    if text.chars().count() <= room {
+        return vec![text.to_string()];
     }
 
-    frame
-        .buffer_mut()
-        .set_string(area.x + BODY_INDENT, y, text, Style::new());
+    // `split("  ")` is the two-space join the frames use between the sentences;
+    // `truncate` is the backstop for a panel too narrow even for one of them.
+    text.split("  ")
+        .map(|sentence| truncate(sentence, room))
+        .collect()
 }
 
 /// One row per visible record, with the scroll summaries at the ends.
@@ -567,7 +593,7 @@ mod tests {
     }
 
     #[test]
-    fn the_widths_and_the_gaps_always_fill_the_area_exactly() {
+    fn the_widths_and_the_gaps_never_overflow_the_area() {
         for naturals in [
             vec![6, 6, 6],
             vec![7, 9, 6],
@@ -629,6 +655,53 @@ mod tests {
         let (widths, dropped) = columns(&[6, 6], 4);
         assert!(widths.is_empty());
         assert_eq!(dropped, 2);
+    }
+
+    // -----------------------------------------------------------------------
+    // notice_lines
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn a_notice_that_fits_is_one_line() {
+        // What frames A and G show at 80x24, where the panel leaves 53.
+        assert_eq!(notice_lines(FAILED, 53), vec![FAILED.to_string()]);
+        assert_eq!(notice_lines(EMPTY, 53), vec![EMPTY.to_string()]);
+    }
+
+    #[test]
+    fn a_notice_too_wide_breaks_between_its_sentences() {
+        // The 60x16 minimum leaves 33, and the failure sentence is 42. It has
+        // to break rather than run over the window's border.
+        assert_eq!(
+            notice_lines(FAILED, 33),
+            vec![
+                "Could not load records.".to_string(),
+                "Press r to retry.".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn no_notice_line_is_ever_wider_than_the_room_it_was_given() {
+        // The invariant the border depends on, over every width the layout
+        // supports and then some.
+        for room in 1..=60 {
+            for text in [EMPTY, FAILED] {
+                for line in notice_lines(text, room) {
+                    assert!(
+                        line.chars().count() <= room,
+                        "{text:?} in {room} produced a {}-character line: {line:?}",
+                        line.chars().count()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_empty_notice_fits_every_supported_panel() {
+        // `No records yet.` never had to break; this is what says so.
+        assert_eq!(notice_lines(EMPTY, 33), vec![EMPTY.to_string()]);
     }
 
     // -----------------------------------------------------------------------

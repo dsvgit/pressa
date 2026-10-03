@@ -18,6 +18,7 @@ use pressa_app::domain::Schema;
 
 use pressa_tui::counted;
 use pressa_tui::tui::keymap::{Context, hints};
+use pressa_tui::tui::view::MIN_WIDTH;
 use pressa_tui::tui::{AppState, Command, update, view};
 
 use support::{example_schema, records, schema_from_yaml, unvalidated_record};
@@ -29,6 +30,9 @@ const HINT_SEPARATOR: &str = "   ";
 /// The table's header row, its rule, and its first body row, at any size: the
 /// main panel starts two rows down and the table fills it from the top.
 const HEADER_ROW: u16 = 2;
+/// One past the panel's last row at height 24: seven of the rows are chrome,
+/// so the body ends before the separator that carries `┴`.
+const PAST_LAST_ROW: u16 = 19;
 const RULE_ROW: u16 = 3;
 const FIRST_BODY_ROW: u16 = 4;
 
@@ -634,5 +638,75 @@ fn every_frame_carries_the_keymaps_own_hints() {
         let terminal = draw(width, height, &state);
         let bar = inner_row(terminal.backend().buffer(), height - 2);
         assert_eq!(bar.trim_end(), expected.trim_end(), "at {width}x{height}");
+    }
+}
+
+#[test]
+fn neither_empty_body_ever_reaches_the_panels_edge() {
+    // The bug this guards: `Could not load records.  Press r to retry.` is 42
+    // characters, and the main panel is only 37 wide at the 60x16 minimum, so
+    // the sentence ran over the window's right border and was cut mid-word —
+    // leaving a body that no longer named the key that retries. The sidebar has
+    // had a test for exactly this since T7; the table's bodies had none.
+    let empty = opened(example_schema(), "posts", &[]);
+    let mut failed = three_posts();
+    update(
+        &mut failed,
+        Command::OperationFailed("database error: disk I/O error".to_string()),
+    );
+
+    // Every width the layout supports, not just the two the frames are drawn at.
+    for width in MIN_WIDTH..=100 {
+        for state in [&empty, &failed] {
+            let terminal = draw(width, 24, state);
+            let buffer = terminal.backend().buffer();
+
+            for y in HEADER_ROW..PAST_LAST_ROW {
+                // The right border is the last column of every row; a body that
+                // wrote over it has overflowed the panel.
+                let border = buffer
+                    .cell((width - 1, y))
+                    .map(|cell| cell.symbol().to_string());
+                assert_eq!(
+                    border.as_deref(),
+                    Some("│"),
+                    "at {width} columns, row {y} wrote over the window's border: {}",
+                    row(buffer, y)
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_failed_load_names_the_retry_key_at_every_supported_width() {
+    // Nothing is clipped silently (`docs/tui.md` §6): the sentence may be laid
+    // out differently in a narrow terminal, but the key must survive.
+    let mut state = three_posts();
+    update(
+        &mut state,
+        Command::OperationFailed("database error: disk I/O error".to_string()),
+    );
+
+    for width in MIN_WIDTH..=100 {
+        let terminal = draw(width, 24, &state);
+        let buffer = terminal.backend().buffer();
+        // The whole body, however many rows the sentence took.
+        let body: String = (HEADER_ROW..PAST_LAST_ROW)
+            .map(|y| panel_row(buffer, y))
+            .collect();
+
+        assert!(
+            body.contains("Could not load records."),
+            "at {width} columns the body lost its first sentence: {body}"
+        );
+        assert!(
+            body.contains("Press r to retry."),
+            "at {width} columns the body lost the key that retries: {body}"
+        );
+        assert!(
+            !body.contains('…'),
+            "at {width} columns the body was clipped: {body}"
+        );
     }
 }

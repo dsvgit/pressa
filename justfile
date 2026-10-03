@@ -107,28 +107,55 @@ sandbox:
         ls -a .pressa                         # data.db appears only after `dev`
         cat .pressa/pressa.log                # started / resolved / services ready / tui started
 
-    ## The list view
-
-    `Enter` on `Posts` loads the collection and draws its table. A fresh
-    `data.db` has no records in it, so what you see is the empty list:
-
-        ┌ pressa › Posts ──────────────────────────────────── 0 records ───┐
-        │ Collections   │  TITLE          STATUS         VIEWS            │
-        │               │ ──────────────────────────────────────────────  │
-        │ > Posts       │                                                │
-        │               │   No records yet.                              │
-        │ ↑↓ Navigate   Esc Back                                         │
-
-    The header row is `list_columns` from `pressa.yaml`, uppercased — edit
-    that list and the columns change with it, with no code change. The title
-    counts what loaded. In the list: `j`/`k` or `↑`/`↓` move, `g`/`G` jump to
-    the ends, `Ctrl+D`/`Ctrl+U` move by ten, `r` reloads, `Esc`/`h`/`←`/`q`
-    goes back. Nothing creates a record yet — that is the editor, T9 — so the
-    table with rows in it is covered by the snapshots in
-    `pressa-tui/tests/snapshots/` rather than here.
-
         cd ../broken && ../pressa validate    # exit 1: collections.posts.fields[3].type ...
         cd ../deep/a/b/c && ../../../../pressa validate   # finds the project in deep/
+
+    ## The list view
+
+    `Enter` on `Posts` loads the collection and draws its table; `Esc` comes
+    back. A fresh `data.db` has no records in it, so what this sandbox shows
+    you is the empty list — the header row, and why the body is empty:
+
+        ┌ pressa › Posts ──────────────────────────────── 0 records ───┐
+        │ Collections   │  TITLE           STATUS          VIEWS      │
+        │               │ ──────────────────────────────────────────  │
+        │ > Posts       │                                             │
+        │               │   No records yet.                           │
+
+    With records in it the same panel draws them, one row each, `▸` on the
+    selection and the count in the title:
+
+        ┌ pressa › Posts ──────────────────────────────── 3 records ───┐
+        │ Collections   │  TITLE           STATUS          VIEWS      │
+        │               │ ──────────────────────────────────────────  │
+        │ > Posts       │ ▸Hello world     draft           0          │
+        │               │  About page      published       42         │
+        │               │  Release notes   draft           —          │
+
+    **You cannot get to that second screen from this sandbox yet**: nothing in
+    the product creates a record until the editor arrives in T9, and `dev` is
+    the only command that opens the screen. Until then the populated table
+    lives in the snapshots — `list_snapshots__frame_b_three_records.snap` and
+    its eight neighbours in `pressa-tui/tests/snapshots/`, which is where both
+    frames above come from. Read those rather than trusting these two, which
+    are trimmed to fit this file.
+
+    What the frames are showing:
+
+    | Thing | Where it comes from |
+    |---|---|
+    | The columns, and their order | `list_columns` in `pressa.yaml` — edit it and the table changes, with no code change |
+    | The header text | each field's `label`, uppercased |
+    | `0 records` / `3 records` | the records that loaded; absent when the load failed |
+    | `—` | a field the record has no value for |
+    | `✓` / `·` | a `boolean` that is true / false |
+    | `{3}` | a `json` object, and its key count |
+    | `↓ 6 more` | records below the panel; nothing is hidden silently |
+
+    Keys in the list: `j`/`k` or `↑`/`↓` move, `g`/`G` jump to the ends,
+    `Ctrl+D`/`Ctrl+U` move by ten, `r` reloads, and `Esc`/`h`/`←`/`q` goes
+    back. Only the first and last are in the hint bar; `?` lists the rest once
+    T11 builds the help overlay.
 
     ## Exit codes
 
