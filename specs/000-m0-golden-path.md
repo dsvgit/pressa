@@ -234,11 +234,9 @@ record, are split differently.
 ```text
 ┌ pressa › Posts › New ────────────────────────────────────────────────────────┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
-│ Collections        │  Title *                                                │
-│                    │  ┌───────────────────────────────────────────────────┐  │
-│ > Posts            │  │ ▌                                                │   │
-│                    │  └───────────────────────────────────────────────────┘  │
-│                    │                                                         │
+│ Collections        │ ▸Title *                                                │
+│                    │    —                                                    │
+│ > Posts            │                                                         │
 │                    │  Slug *                                                 │
 │                    │    —                                                    │
 │                    │                                                         │
@@ -250,19 +248,23 @@ record, are split differently.
 │                    │  Views                                                  │
 │                    │    —                                                    │
 │                    │                                                         │
-│                    │  Featured        [ ]                          ↓ 2 more  │
+│                    │  Featured        [ ]                                    │
+│                    │                                                         │
+│                    │  Published at                                 ↓ 1 more  │
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ Tab Next  Enter Edit  Ctrl+S Save  Esc Back  ? Help                          │
+│ Tab Next   Enter Edit   Ctrl+S Save   Esc Back   ? Help                      │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The focused field is boxed; unfocused fields are drawn as plain values, so a
-`Textarea` occupies one line until it is focused ([`tui.md`](../docs/tui.md)
-§5.3). Even so the form is ~24 rows tall and the body is 17, so `Featured`,
-`Published at` and `Metadata` start below the fold and the form scrolls to
-follow focus.
+The focused field is marked by `▸` and a reverse-video bar on its value row,
+which a text frame cannot show; every field, focused or not, takes the same
+rows, so moving the focus moves nothing else ([008](008-record-editor.md) Q16).
+The form is 18 rows tall and the body is 17, so `Published at` is cut off after
+its label and `Metadata` is below the fold. There is no cursor, because nothing
+is being typed yet — `▌` appears only in an input context
+([008](008-record-editor.md) Q15).
 
 `Status` is empty rather than pre-filled with `draft`: `RecordService::blank`
 leaves a required `Select` unset ([004](004-app-services.md)), so the user
@@ -273,11 +275,9 @@ chooses it and step 6 can report it as missing.
 ```text
 ┌ pressa › Posts › New ────────────────────────────────────────────────────────┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
-│ Collections        │  Title *                                                │
-│                    │  ┌───────────────────────────────────────────────────┐  │
-│ > Posts            │  │ ▌                                                │   │
-│                    │  └───────────────────────────────────────────────────┘  │
-│                    │  ⚠ required                                             │
+│ Collections        │ ▸Title *                                                │
+│                    │    —                                                    │
+│ > Posts            │  ⚠ required                                             │
 │                    │                                                         │
 │                    │  Slug *                                                 │
 │                    │    —                                                    │
@@ -289,11 +289,13 @@ chooses it and step 6 can report it as missing.
 │                    │  Content                                                │
 │                    │    —                                                    │
 │                    │                                                         │
-│                    │  Views                                        ↓ 3 more  │
+│                    │  Views                                                  │
+│                    │    —                                                    │
+│                    │                                               ↓ 3 more  │
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │ 3 fields need attention                                                      │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ Tab Next  Enter Edit  Ctrl+S Save  Esc Back  ? Help                          │
+│ Tab Next   Enter Edit   Ctrl+S Save   Esc Back   ? Help                      │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -303,35 +305,36 @@ satisfies `required`. The route does not change and the draft is untouched.
 ### E — Filled and dirty (step 7)
 
 ```text
-┌ pressa › Posts › New ───────────────────────────────── ● unsaved · Ctrl+S ───┐
+┌ pressa › Posts › Hello world ───────────────────────── ● unsaved · Ctrl+S ───┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
-│ Collections        │  Status *        ‹ published ›                ↑ 2 more  │
+│ Collections        │  Title *                                                │
+│                    │    Hello world                                          │
+│ > Posts            │                                                         │
+│                    │  Slug *                                                 │
+│                    │    hello-world                                          │
 │                    │                                                         │
-│ > Posts            │  Content                                                │
+│                    │  Status *        ‹ published ›                          │
+│                    │                                                         │
+│                    │  Content                                                │
 │                    │    —                                                    │
 │                    │                                                         │
-│                    │  Views                                                  │
-│                    │  ┌───────────────────────────────────────────────────┐  │
-│                    │  │ 42▌                                              │   │
-│                    │  └───────────────────────────────────────────────────┘  │
+│                    │ ▸Views                                                  │
+│                    │    42                                                   │
 │                    │                                                         │
 │                    │  Featured        [ ]                                    │
 │                    │                                                         │
-│                    │  Published at                                           │
-│                    │    —                                                    │
-│                    │                                                         │
-│                    │  Metadata                                               │
-│                    │    —                                                    │
+│                    │  Published at                                 ↓ 1 more  │
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ Tab Next  Enter Edit  Ctrl+S Save  Esc Back  ? Help                          │
+│ Tab Next   Enter Edit   Ctrl+S Save   Esc Back   ? Help                      │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The viewport has followed focus down to `Views`. The header carries the unsaved
-indicator; the hint bar is the `Editor` context, because `CommitField` has
-returned from `EditorInput`.
+Focus is on `Views` and nothing has moved since frame C but the focus marker:
+focus changes no field's height ([008](008-record-editor.md) Q16). The header carries the unsaved indicator and
+names the record; the hint bar is the `Editor` context, because `CommitField`
+has returned from `EditorInput`.
 
 ### F — List after save (steps 8–9)
 
@@ -365,13 +368,11 @@ returned from `EditorInput`.
 ### G — Editing a stored record (step 10)
 
 ```text
-┌ pressa › Posts › Edit ───────────────────────────────────────────────────────┐
+┌ pressa › Posts › Hello world ────────────────────────────────────────────────┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
-│ Collections        │  Title *                                                │
-│                    │  ┌───────────────────────────────────────────────────┐  │
-│ > Posts            │  │ Hello world▌                                     │   │
-│                    │  └───────────────────────────────────────────────────┘  │
-│                    │                                                         │
+│ Collections        │ ▸Title *                                                │
+│                    │    Hello world                                          │
+│ > Posts            │                                                         │
 │                    │  Slug *                                                 │
 │                    │    hello-world                                          │
 │                    │                                                         │
@@ -383,11 +384,13 @@ returned from `EditorInput`.
 │                    │  Views                                                  │
 │                    │    42                                                   │
 │                    │                                                         │
-│                    │  Featured        [ ]                          ↓ 2 more  │
+│                    │  Featured        [ ]                                    │
+│                    │                                                         │
+│                    │  Published at                                 ↓ 1 more  │
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ Tab Next  Enter Edit  Ctrl+S Save  Esc Back  ? Help                          │
+│ Tab Next   Enter Edit   Ctrl+S Save   Esc Back   ? Help                      │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -640,3 +643,13 @@ another document, and a reviewer will otherwise read those changes as drift.
 | 7 | Where the end-to-end test lives | `pressa-tui/tests/golden_path.rs`; no fifth crate, ADR-0006 untouched | — |
 | 8 | Steps 12 and 15 disagreed on the exit keystrokes | Both are `q`, `q`; step 15 corrected | this spec |
 | 9 | What happens to the list after a save | Route to `List` and reload, from both `New` and `Edit` | this spec, §Invariants |
+
+### Frames regenerated by T9
+
+Frames C, D, E and G were regenerated from [008](008-record-editor.md)'s
+rules when T9 shipped: focus is `▸` and a reverse-video bar rather than a box
+(008 Q16), the hint bar is joined with three spaces, the cursor is drawn only
+while typing, the third crumb names the record, and frame E no longer
+scrolls. Each still carries `? Help`, because these frames are as of
+T12. Frame I belongs to the delete dialog and to 009 (T10), and is left for it.
+

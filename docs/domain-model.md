@@ -73,8 +73,20 @@ pub struct CollectionCapabilities {
 ```
 
 In M0 every capability is `true`. It exists so that read-only collections later
-do not require the UI to grow special cases; the UI already asks
-`collection.capabilities.delete` before offering `d`.
+do not require the UI to grow special cases.
+
+No M0 schema can express a `false` capability: [`specs/001`](../specs/001-schema-config.md)
+has no key for one, so a branch on it would be unreachable through the loader
+and testable only against a hand-built `Collection` no YAML can produce. T9
+therefore reads none ([`specs/008`](../specs/008-record-editor.md) Q12). When a
+schema can say `create: false` or `update: false` (M3), the checks go in
+`update`, not in the keymap or a renderer: `NewRecord` returns early at a list
+whose collection cannot create, and `BeginEdit`, `ToggleBoolean`,
+`NextOption`, `PrevOption` and `Save` at an `Edit` route whose collection
+cannot update — the form still opens, read-only. `RecordService::create` and
+`update` refuse the same way, so the UI's check is a courtesy and not the
+guarantee. T10 is the first task to read a capability, `delete`, before
+offering `d`.
 
 Collection invariants (enforced at load time, see [`specs/001`](../specs/001-schema-config.md)):
 
@@ -210,6 +222,14 @@ pub fn validate_record(
 Errors are a **vector of structured errors, never a string**. The form has to
 place each message under the field it belongs to, and tests have to assert on
 `code` rather than on prose.
+
+`InvalidJson` and `InvalidDateTime` are also produced by the editor itself:
+`form::parse` in `pressa-tui` turns the text a user typed into a value on
+`CommitField`, and refuses text that is not JSON or not an RFC 3339 date with
+those codes and SPEC-002's messages, keeping the field open
+([`specs/008`](../specs/008-record-editor.md) Q6). `validate_record` never
+returns `InvalidJson` — a `serde_json::Value` is already valid JSON — and
+returns `InvalidDateTime` only for a string a document arrived with.
 
 `NotUnique` cannot be decided by `pressa-core` alone — it needs storage. The
 core validator returns everything else; `RecordService` runs the uniqueness

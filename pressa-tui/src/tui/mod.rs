@@ -21,7 +21,9 @@ use pressa_app::domain::{RecordRepository, Schema};
 pub use command::{Command, Effect};
 pub use effects::run_effects;
 pub use keymap::{Context, Hint, KEYMAP, KeyBinding, hints, key_label, resolve};
-pub use state::{AppState, ListState, Load, Route, SidebarState, StatusKind, StatusMessage};
+pub use state::{
+    AppState, EditorState, ListState, Load, Overlay, Route, SidebarState, StatusKind, StatusMessage,
+};
 pub use terminal::{TerminalGuard, TerminalOps, install_panic_hook};
 pub use update::{PAGE, update};
 pub use view::view;
@@ -87,7 +89,7 @@ pub fn drive<B: Backend>(
         if let Event::Key(key) = events().map_err(TuiError::Input)? {
             // Windows sends a release for every press; only the press acts.
             if key.kind == KeyEventKind::Press {
-                if let Some(command) = resolve(keymap::context_for(&state.route), key) {
+                if let Some(command) = resolve(keymap::context_for(state), key) {
                     // Bound first: `state` cannot be borrowed mutably twice
                     // in one call, so `update` has to finish before `drain`.
                     let pending = update(state, command);
@@ -105,8 +107,9 @@ pub fn drive<B: Backend>(
 /// and runs whatever *those* return — until nothing is left, and only then does
 /// the caller draw again.
 ///
-/// Written as a queue although T8's one effect settles in a single pass: T9's
-/// save answers with a command whose `update` returns another effect.
+/// A queue because a save answers with a command whose `update` returns
+/// another effect: `Save` → `SaveRecord` → `RecordSaved` → `LoadRecords` →
+/// `RecordsLoaded` settles in three rounds.
 fn drain(
     state: &mut AppState,
     pending: Vec<Effect>,

@@ -5,13 +5,14 @@ use ratatui::layout::{Alignment, Rect};
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 
-use pressa_app::domain::Schema;
-
 use crate::counted;
-use crate::tui::keymap::context_for;
-use crate::tui::state::{AppState, Load, Route, collection_label};
+use crate::tui::command::Command;
+use crate::tui::keymap::{Context, context_for, key_for};
+use crate::tui::state::{AppState, Load, Route, StatusKind, StatusMessage, collection_label};
 
 pub mod chrome;
+pub mod form;
+pub mod overlay;
 pub mod sidebar;
 pub mod table;
 
@@ -23,6 +24,11 @@ pub const MIN_HEIGHT: u16 = 16;
 pub const SIDEBAR_WIDTH: u16 = 20;
 /// The root of every breadcrumb trail.
 const ROOT_CRUMB: &str = "pressa";
+/// The editor's third crumb: at most this wide, else the id this short, else
+/// this word (SPEC-008 Q8).
+const CRUMB_WIDTH: usize = 20;
+const SHORT_ID: usize = 6;
+const NEW_CRUMB: &str = "New";
 
 /// The first row a windowed list shows.
 ///
@@ -96,14 +102,45 @@ pub fn layout(area: Rect) -> Panels {
 ///
 /// Total: a slug the schema does not know is printed as the slug, so a stale
 /// route is visible rather than fatal.
-pub fn breadcrumbs(route: &Route, schema: &Schema) -> Vec<String> {
-    match route {
+pub fn breadcrumbs(state: &AppState) -> Vec<String> {
+    let schema = &state.schema;
+    match &state.route {
         Route::Home => vec![ROOT_CRUMB.to_string()],
         Route::List { collection } => vec![
             ROOT_CRUMB.to_string(),
             collection_label(schema, collection).to_string(),
         ],
+        Route::New { collection } | Route::Edit { collection, .. } => vec![
+            ROOT_CRUMB.to_string(),
+            collection_label(schema, collection).to_string(),
+            record_crumb(state, collection),
+        ],
     }
+}
+
+/// The editor's third crumb: the draft's first `list_columns` value through
+/// the table's own cell renderer, cut to 20 characters; the shortened id at
+/// `Edit` and `New` at `New` when that value is absent (SPEC-008 Q8).
+///
+/// Read from the draft, so it follows a rename as each field is committed.
+fn record_crumb(state: &AppState, slug: &str) -> String {
+    let named = state.schema.collections.get(slug).and_then(|collection| {
+        // The first list column's field; `find` because columns are names.
+        let name = collection.list_columns.first()?;
+        let field = collection.fields.iter().find(|field| &field.name == name)?;
+        let cell = table::cell(&field.kind, state.editor.draft.get(name.as_str()));
+        // The absent dash cannot name a record.
+        (cell.text != table::ABSENT).then(|| truncate(&cell.text, CRUMB_WIDTH))
+    });
+
+    // `unwrap_or_else` builds the fallback only when the draft named nothing.
+    named.unwrap_or_else(|| match state.editor.id {
+        Some(id) => {
+            let short: String = id.to_string().chars().take(SHORT_ID).collect();
+            format!("{short}…")
+        }
+        None => NEW_CRUMB.to_string(),
+    })
 }
 
 /// Draws the whole screen.
@@ -116,41 +153,81 @@ pub fn view(state: &AppState, frame: &mut Frame) {
         return;
     }
 
-    let title = format!(" {} ", breadcrumbs(&state.route, &state.schema).join(" › "));
+    let title = format!(" {} ", breadcrumbs(state).join(" › "));
     // `as_deref` hands `shell` a `&str` without moving the `String` it owns.
-    chrome::shell(frame, area, &title, record_count(state).as_deref());
+    chrome::shell(frame, area, &title, title_segment(state).as_deref());
 
     let panels = layout(area);
     sidebar::render(frame, panels.sidebar, state);
     main_panel(frame, panels.main, state);
-    chrome::status(frame, panels.status, state.status.as_ref());
-    chrome::hint_bar(frame, panels.hints, context_for(&state.route));
+    // The attention line, when there is one, wins over an older message.
+    let attention = attention(state);
+    chrome::status(
+        frame,
+        panels.status,
+        attention.as_ref().or(state.status.as_ref()),
+    );
+    chrome::hint_bar(frame, panels.hints, context_for(state));
 }
 
-/// The count the window title carries, if any.
+/// The right-hand segment of the window title, if any: a list's record count,
+/// or an editor's unsaved marker.
 ///
-/// Omitted unless we are in a list whose load succeeded: the title must not
-/// report 0 records for a collection whose contents are unknown (frame G).
-fn record_count(state: &AppState) -> Option<String> {
+/// The count is omitted unless the list's load succeeded: the title must not
+/// report 0 records for a collection whose contents are unknown (frame G). The
+/// marker shows only while `draft != original` (SPEC-008 Q5), and names the
+/// save key from the keymap rather than spelling it.
+fn title_segment(state: &AppState) -> Option<String> {
     match (&state.route, state.list.load) {
         (Route::List { .. }, Load::Ok) => {
             Some(format!(" {} ", counted(state.list.records.len(), "record")))
+        }
+        (Route::New { .. } | Route::Edit { .. }, _) if state.editor.is_dirty() => {
+            key_for(Context::Editor, &Command::Save).map(|key| format!(" ● unsaved · {key} "))
         }
         _ => None,
     }
 }
 
-/// The panel every later screen fills: the empty state at Home, the table in a
-/// list.
+/// `3 fields need attention`, derived from the editor's errors rather than
+/// stored (SPEC-008 Q11): it cannot go stale. Info-styled, so no `⚠`.
+fn attention(state: &AppState) -> Option<StatusMessage> {
+    let n = state.editor.errors.len();
+    if state.route.editing().is_none() || n == 0 {
+        return None;
+    }
+    // The verb agrees with the noun as well.
+    let verb = if n == 1 { "needs" } else { "need" };
+    Some(StatusMessage {
+        text: format!("{} {verb} attention", counted(n, "field")),
+        kind: StatusKind::Info,
+    })
+}
+
+/// The panel every screen fills: the empty state at Home, the table in a
+/// list, the form in an editor with any overlay on top of it.
 fn main_panel(frame: &mut Frame, area: Rect, state: &AppState) {
-    // A `Route::List` naming a collection the schema does not know falls
-    // through to the Home body rather than panicking — a stale route is
-    // visible, as the breadcrumbs already make it.
-    if let Route::List { collection } = &state.route {
-        if let Some(collection) = state.schema.collections.get(collection) {
-            table::render(frame, area, state, collection);
-            return;
+    // A route naming a collection the schema does not know falls through to
+    // the Home body rather than panicking — a stale route is visible, as the
+    // breadcrumbs already make it.
+    match &state.route {
+        Route::List { collection } => {
+            if let Some(collection) = state.schema.collections.get(collection) {
+                table::render(frame, area, state, collection);
+                return;
+            }
         }
+        Route::New { collection } | Route::Edit { collection, .. } => {
+            if let Some(collection) = state.schema.collections.get(collection) {
+                form::render(frame, area, state, collection);
+                // Drawn last, over the form, which stays visible around it.
+                if let Some(overlay) = &state.overlay {
+                    overlay::render(frame, area, overlay);
+                }
+                return;
+            }
+        }
+        Route::Home => {}
     }
 
     let lines = vec![

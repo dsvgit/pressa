@@ -1,5 +1,6 @@
 ---
 source: pressa-tui/tests/list_snapshots.rs
+assertion_line: 238
 expression: "draw(60, 16, &state).backend()"
 ---
 "┌ pressa › Entries ─────────────────────────── 1 record ───┐"
@@ -16,5 +17,5 @@ expression: "draw(60, 16, &state).backend()"
 "├────────────────────┴─────────────────────────────────────┤"
 "│                                                          │"
 "├──────────────────────────────────────────────────────────┤"
-"│ ↑↓ Navigate   Esc Back                                   │"
+"│ ↑↓ Navigate   Enter Edit   n New   Esc Back              │"
 "└──────────────────────────────────────────────────────────┘"

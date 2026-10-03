@@ -12,9 +12,11 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
+use pressa_app::domain::RecordId;
 use pressa_tui::tui::state::collection_label;
 use pressa_tui::tui::view::breadcrumbs;
-use pressa_tui::tui::{AppState, Command, Effect, Load, PAGE, Route, update};
+
+use pressa_tui::tui::{AppState, Command, Effect, Load, PAGE, Route, StatusKind, update};
 
 use support::{example_schema, records, schema_from_yaml};
 
@@ -175,32 +177,103 @@ fn quit_asks_the_loop_to_stop() {
 // Breadcrumbs
 // ---------------------------------------------------------------------------
 
+/// `schema` at `route`, everything else fresh.
+fn at(route: Route) -> AppState {
+    let mut state = AppState::new(example_schema());
+    state.route = route;
+    state
+}
+
 #[test]
 fn breadcrumbs_come_from_the_route_and_the_schema() {
-    let schema = example_schema();
-
-    assert_eq!(breadcrumbs(&Route::Home, &schema), ["pressa"]);
+    assert_eq!(breadcrumbs(&at(Route::Home)), ["pressa"]);
     assert_eq!(
-        breadcrumbs(
-            &Route::List {
-                collection: "posts".to_string()
-            },
-            &schema
-        ),
+        breadcrumbs(&at(Route::List {
+            collection: "posts".to_string()
+        })),
         ["pressa", "Posts"]
     );
 }
 
 #[test]
 fn breadcrumbs_print_a_slug_the_schema_does_not_know() {
-    let schema = example_schema();
-    let route = Route::List {
+    let state = at(Route::List {
         collection: "drafts".to_string(),
-    };
+    });
 
     // Visible rather than fatal: a stale route shows up on screen.
-    assert_eq!(breadcrumbs(&route, &schema), ["pressa", "drafts"]);
-    assert_eq!(collection_label(&schema, "drafts"), "drafts");
+    assert_eq!(breadcrumbs(&state), ["pressa", "drafts"]);
+    assert_eq!(collection_label(&state.schema, "drafts"), "drafts");
+
+    // And at the editor's two routes, which name no record either.
+    let state = at(Route::New {
+        collection: "drafts".to_string(),
+    });
+    assert_eq!(breadcrumbs(&state), ["pressa", "drafts", "New"]);
+    let id = RecordId::new();
+    let mut state = at(Route::Edit {
+        collection: "drafts".to_string(),
+        id,
+    });
+    state.editor.id = Some(id);
+    assert_eq!(breadcrumbs(&state)[1], "drafts");
+}
+
+/// The posts list, opened, with `documents` loaded.
+fn posts_with(documents: &[&str]) -> AppState {
+    let schema = example_schema();
+    let loaded = records(&schema, "posts", documents);
+    let mut state = AppState::new(schema);
+    update(&mut state, Command::Select);
+    update(&mut state, Command::RecordsLoaded(loaded));
+    state
+}
+
+#[test]
+fn the_third_crumb_names_the_record_from_the_draft() {
+    // New and blank: the draft cannot name itself.
+    let mut state = posts_with(&[]);
+    update(&mut state, Command::NewRecord);
+    assert_eq!(breadcrumbs(&state), ["pressa", "Posts", "New"]);
+
+    // A committed title renames it, live.
+    update(&mut state, Command::BeginEdit);
+    for c in "Hello world".chars() {
+        update(&mut state, Command::InputChar(c));
+    }
+    assert_eq!(breadcrumbs(&state)[2], "New", "typing is not committing");
+    update(&mut state, Command::CommitField);
+    assert_eq!(breadcrumbs(&state), ["pressa", "Posts", "Hello world"]);
+
+    // Twenty characters at most, the last of them `…`.
+    update(&mut state, Command::BeginEdit);
+    for c in " and a great deal more".chars() {
+        update(&mut state, Command::InputChar(c));
+    }
+    update(&mut state, Command::CommitField);
+    let crumb = &breadcrumbs(&state)[2];
+    assert_eq!(crumb.chars().count(), 20, "crumb was {crumb}");
+    assert_eq!(crumb, "Hello world and a g…");
+}
+
+#[test]
+fn an_edited_record_with_no_name_is_its_shortened_id() {
+    let schema = example_schema();
+    // Straight through the repository: the service would refuse a post with
+    // no title, which is exactly the record this crumb is for.
+    let record = support::unvalidated_record("posts", r#"{"slug":"untitled"}"#);
+    let mut state = AppState::new(schema);
+    update(&mut state, Command::Select);
+    update(&mut state, Command::RecordsLoaded(vec![record.clone()]));
+    update(&mut state, Command::EditRecord);
+    update(&mut state, Command::RecordLoaded(Box::new(record.clone())));
+
+    let id = record.id.to_string();
+    let short: String = id.chars().take(6).collect();
+    assert_eq!(
+        breadcrumbs(&state),
+        ["pressa", "Posts", &format!("{short}…")]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -710,4 +783,116 @@ fn a_failing_effect_runner_cannot_end_the_loop() {
 
     assert!(state.should_quit, "the loop ran to the quit");
     assert_eq!(state.list.load, Load::Failed);
+}
+
+#[test]
+fn the_save_round_trip_settles_before_the_next_draw() {
+    // SPEC-008 "Saving": `Save` -> `SaveRecord` -> `RecordSaved` ->
+    // `LoadRecords` -> `RecordsLoaded`, all inside one pass of the loop.
+    let schema = example_schema();
+    let saved = records(
+        &schema,
+        "posts",
+        &[r#"{"title":"Hello","slug":"hello","status":"draft"}"#],
+    );
+
+    let mut state = AppState::new(schema);
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("test terminal");
+
+    // `Enter` opens Posts, `n` a blank form, `Ctrl+S` saves; then `q`, `q`.
+    let mut keys = vec![
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL),
+        KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE),
+    ]
+    .into_iter();
+    // Each read is the start of one pass, after one draw.
+    let mut draws = Vec::new();
+    let mut events = || {
+        draws.push(());
+        match keys.next() {
+            Some(key) => Ok(Event::Key(key)),
+            None => Err(io::Error::other("the loop read past the quit")),
+        }
+    };
+    let mut asked = Vec::new();
+    let mut effects = |effects: Vec<Effect>| {
+        let answers: Vec<Command> = effects
+            .iter()
+            .map(|effect| match effect {
+                Effect::LoadRecords { .. } => Command::RecordsLoaded(saved.clone()),
+                Effect::SaveRecord { .. } => Command::RecordSaved(Box::new(saved[0].clone())),
+                Effect::LoadRecord { .. } => panic!("nothing is edited here"),
+            })
+            .collect();
+        asked.extend(effects);
+        answers
+    };
+
+    pressa_tui::tui::drive(&mut state, &mut terminal, &mut events, &mut effects)
+        .expect("the loop exits cleanly");
+
+    // Three rounds for the save: SaveRecord, then the reload it led to.
+    let kinds: Vec<&str> = asked
+        .iter()
+        .map(|effect| match effect {
+            Effect::LoadRecords { .. } => "LoadRecords",
+            Effect::SaveRecord { .. } => "SaveRecord",
+            Effect::LoadRecord { .. } => "LoadRecord",
+        })
+        .collect();
+    assert_eq!(kinds, ["LoadRecords", "SaveRecord", "LoadRecords"]);
+    // One draw per key and none in between: five keys, five reads, and the
+    // terminal's own count of completed draws is the same five.
+    assert_eq!(draws.len(), 5, "one read per key");
+    assert_eq!(
+        terminal.get_frame().count(),
+        5,
+        "a redraw happened mid-drain"
+    );
+    assert_eq!(state.list.records.len(), 1, "the reload reached the list");
+    assert_eq!(
+        state.status.as_ref().map(|status| status.kind),
+        Some(StatusKind::Info)
+    );
+    assert!(state.should_quit);
+}
+
+#[test]
+fn a_failed_save_does_not_end_the_session() {
+    let mut state = AppState::new(example_schema());
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("test terminal");
+
+    // Open, `n`, `Ctrl+S` fails, `Esc` back (clean, so no dialog), `q`, `q`.
+    let mut keys = vec![
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL),
+        KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE),
+    ]
+    .into_iter();
+    let mut events = move || match keys.next() {
+        Some(key) => Ok(Event::Key(key)),
+        None => Err(io::Error::other("the loop read past the quit")),
+    };
+    let mut effects = |effects: Vec<Effect>| {
+        effects
+            .iter()
+            .map(|effect| match effect {
+                Effect::SaveRecord { .. } => {
+                    Command::OperationFailed("database error: disk I/O error".to_string())
+                }
+                _ => Command::RecordsLoaded(Vec::new()),
+            })
+            .collect()
+    };
+
+    pressa_tui::tui::drive(&mut state, &mut terminal, &mut events, &mut effects)
+        .expect("a failed save is not a failed loop");
+
+    assert!(state.should_quit, "the session ran to the quit");
 }

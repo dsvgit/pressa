@@ -533,9 +533,15 @@ fn breadcrumbs(route: &Route, schema: &Schema) -> Vec<String>
 The second element is the collection's `label`, from the schema; a slug the
 schema does not know is printed as the slug, so a stale route is visible rather
 than a panic. The function is total, pure and takes no `AppState`, which is
-what makes it testable independently of any screen. T9's
-`["pressa", "Posts", "Edit", "01J8XQ…"]` — a record id shortened to its first
-six characters and `…` — is added by T9 with its route.
+what makes it testable independently of any screen.
+
+> **Corrected by [SPEC-008](008-record-editor.md) Q8.** This section promised
+> that T9 would add `["pressa", "Posts", "Edit", "01J8XQ…"]`. T9 shipped three
+> crumbs instead: the third names the record from the draft's first
+> `list_columns` value (`["pressa", "Posts", "Hello world"]`), falling back to
+> the shortened id at `Edit` and `New` at `New`. Naming the record from the
+> draft means `breadcrumbs` now takes the `AppState` rather than the route
+> alone.
 
 ## API
 

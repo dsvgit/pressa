@@ -326,6 +326,46 @@ fn blank_gives_every_field_a_key_with_false_for_booleans_and_null_otherwise() {
 }
 
 #[test]
+fn blank_is_exactly_the_pure_blank_document_for_every_collection() {
+    // SPEC-008 Q2: the defaults are stated once, in `pressa-core`, and the
+    // service delegates. Every collection of the example, and a collection with
+    // one field of each type, so no type can default differently in the two.
+    let seven_types = schema_from(
+        "\
+project:
+  name: fixture
+
+collections:
+  entries:
+    list_columns: [headline]
+    fields:
+      - { name: headline, type: text, required: true }
+      - { name: notes, type: textarea }
+      - { name: hits, type: number }
+      - { name: pinned, type: boolean }
+      - { name: released_at, type: datetime }
+      - { name: state, type: select, options: [draft, published], required: true }
+      - { name: extra, type: json }
+",
+    );
+    let example = pressa_app::config::load_schema(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples/blog/pressa.yaml"),
+    )
+    .expect("the example schema is valid");
+
+    for schema in [example, seven_types] {
+        let service = RecordService::new(MemoryRepository::new(), schema.clone());
+        for (slug, collection) in &schema.collections {
+            assert_eq!(
+                service.blank(slug).expect("blank"),
+                pressa_app::domain::blank_document(collection),
+                "{slug}: the service and the pure function disagree"
+            );
+        }
+    }
+}
+
+#[test]
 fn a_blank_record_fails_validation_with_one_required_per_required_field() {
     let schema = schema_from(POSTS);
     let service = RecordService::new(MemoryRepository::new(), schema.clone());

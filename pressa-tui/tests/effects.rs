@@ -11,8 +11,9 @@ mod support;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
-use pressa_app::RecordService;
 use pressa_app::config::load_schema;
+use pressa_app::domain::{ErrorCode, Json, RecordId};
+use pressa_app::{AppError, RecordService};
 use pressa_storage::{MemoryRepository, SqliteRepository};
 
 use pressa_tui::tui::{AppState, Command, Effect, run_effects};
@@ -117,6 +118,231 @@ fn every_effect_is_run_in_order() {
 fn no_effects_ask_for_nothing() {
     let service = RecordService::new(MemoryRepository::new(), example_schema());
     assert!(run_effects(&service, Vec::new()).is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// SPEC-008: one record, and saving it
+// ---------------------------------------------------------------------------
+
+/// A service over an empty `MemoryRepository` and the example schema.
+fn memory_service() -> RecordService<MemoryRepository> {
+    RecordService::new(MemoryRepository::new(), example_schema())
+}
+
+fn document(text: &str) -> Json {
+    text.parse().expect("the document is JSON")
+}
+
+const HELLO: &str =
+    r#"{"title":"Hello world","slug":"hello-world","status":"published","views":42}"#;
+
+#[test]
+fn load_record_answers_with_the_record() {
+    let service = memory_service();
+    let stored = service.create("posts", document(HELLO)).expect("valid");
+
+    let commands = run_effects(
+        &service,
+        vec![Effect::LoadRecord {
+            collection: "posts".to_string(),
+            id: stored.id,
+        }],
+    );
+
+    assert_eq!(commands, vec![Command::RecordLoaded(Box::new(stored))]);
+}
+
+#[test]
+fn a_missing_record_answers_with_operation_failed() {
+    let service = memory_service();
+    let stored = service.create("posts", document(HELLO)).expect("valid");
+    service.delete("posts", &stored.id).expect("deleted");
+
+    let commands = run_effects(
+        &service,
+        vec![Effect::LoadRecord {
+            collection: "posts".to_string(),
+            id: stored.id,
+        }],
+    );
+
+    let [Command::OperationFailed(message)] = commands.as_slice() else {
+        panic!("a missing record is a failure, got {commands:?}");
+    };
+    assert!(message.starts_with("no record"), "message was: {message}");
+}
+
+#[test]
+fn save_record_without_an_id_creates() {
+    let service = memory_service();
+
+    let commands = run_effects(
+        &service,
+        vec![Effect::SaveRecord {
+            collection: "posts".to_string(),
+            id: None,
+            data: document(HELLO),
+        }],
+    );
+
+    let [Command::RecordSaved(saved)] = commands.as_slice() else {
+        panic!("a valid create answers with RecordSaved, got {commands:?}");
+    };
+    // What `create` returned is what the service now holds.
+    assert_eq!(service.get("posts", &saved.id).expect("stored"), **saved);
+    assert_eq!(saved.data, document(HELLO));
+}
+
+#[test]
+fn save_record_with_an_id_updates_in_place() {
+    let service = memory_service();
+    let stored = service.create("posts", document(HELLO)).expect("valid");
+    // Storage stamps with the clock; a moment later is a later stamp.
+    std::thread::sleep(std::time::Duration::from_millis(5));
+
+    let renamed = document(
+        r#"{"title":"Hello, world!","slug":"hello-world","status":"published","views":42}"#,
+    );
+    let commands = run_effects(
+        &service,
+        vec![Effect::SaveRecord {
+            collection: "posts".to_string(),
+            id: Some(stored.id),
+            data: renamed.clone(),
+        }],
+    );
+
+    let [Command::RecordSaved(saved)] = commands.as_slice() else {
+        panic!("a valid update answers with RecordSaved, got {commands:?}");
+    };
+    assert_eq!(saved.id, stored.id);
+    assert_eq!(saved.data, renamed);
+    assert!(saved.updated_at > stored.updated_at, "updated_at moved on");
+}
+
+#[test]
+fn a_refused_save_answers_with_the_field_errors_unchanged() {
+    let service = memory_service();
+    let blank = service.blank("posts").expect("blank");
+
+    // What the service itself says, to compare against field for field.
+    let Err(AppError::Validation(expected)) = service.create("posts", blank.clone()) else {
+        panic!("a blank post is refused");
+    };
+
+    let commands = run_effects(
+        &service,
+        vec![Effect::SaveRecord {
+            collection: "posts".to_string(),
+            id: None,
+            data: blank,
+        }],
+    );
+
+    assert_eq!(commands, vec![Command::SaveFailed(expected.clone())]);
+    let codes: Vec<(&str, ErrorCode, &str)> = expected
+        .iter()
+        .map(|error| (error.field.as_str(), error.code, error.message.as_str()))
+        .collect();
+    assert_eq!(
+        codes,
+        [
+            ("title", ErrorCode::Required, "required"),
+            ("slug", ErrorCode::Required, "required"),
+            ("status", ErrorCode::Required, "required"),
+        ]
+    );
+}
+
+#[test]
+fn the_repository_is_not_written_when_the_service_refuses() {
+    let service = memory_service();
+    let blank = service.blank("posts").expect("blank");
+
+    run_effects(
+        &service,
+        vec![Effect::SaveRecord {
+            collection: "posts".to_string(),
+            id: None,
+            data: blank,
+        }],
+    );
+
+    assert_eq!(
+        service.count("posts", &Default::default()).expect("count"),
+        0
+    );
+}
+
+#[test]
+fn a_repository_that_fails_answers_with_its_own_message() {
+    // A real `StorageError` from a real adapter, which this crate cannot name
+    // (SPEC-008 "Non-goals"): a `unique` field whose name the loader would
+    // refuse. Validation passes — the key is in the schema — and the
+    // repository refuses to interpolate the name into its lookup.
+    let mut schema = example_schema();
+    let posts = schema.collections.get_mut("posts").expect("posts");
+    let slug = posts
+        .fields
+        .iter_mut()
+        .find(|field| field.unique)
+        .expect("posts has a unique field");
+    slug.name = "slug; --".to_string();
+    let service = RecordService::new(MemoryRepository::new(), schema);
+
+    let commands = run_effects(
+        &service,
+        vec![Effect::SaveRecord {
+            collection: "posts".to_string(),
+            id: None,
+            data: document(r#"{"title":"Hello","slug; --":"hello","status":"draft"}"#),
+        }],
+    );
+
+    assert_eq!(
+        commands,
+        vec![Command::OperationFailed(
+            "not a usable field name: slug; --".to_string()
+        )],
+        "a storage failure is not a validation failure"
+    );
+    assert_eq!(
+        service.count("posts", &Default::default()).expect("count"),
+        0
+    );
+}
+
+#[test]
+fn every_other_save_failure_answers_with_its_own_message() {
+    let service = memory_service();
+
+    // An unknown collection, and an update of a record that is not there:
+    // two `AppError`s that are not `Validation`, both on the real path.
+    let commands = run_effects(
+        &service,
+        vec![
+            Effect::SaveRecord {
+                collection: "drafts".to_string(),
+                id: None,
+                data: document(HELLO),
+            },
+            Effect::SaveRecord {
+                collection: "posts".to_string(),
+                id: Some(RecordId::new()),
+                data: document(HELLO),
+            },
+        ],
+    );
+
+    let [
+        Command::OperationFailed(unknown),
+        Command::OperationFailed(missing),
+    ] = commands.as_slice()
+    else {
+        panic!("neither is a validation failure, got {commands:?}");
+    };
+    assert_eq!(unknown, "unknown collection: drafts");
+    assert!(missing.starts_with("no record"), "message was: {missing}");
 }
 
 // ---------------------------------------------------------------------------

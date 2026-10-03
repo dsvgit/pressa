@@ -371,10 +371,14 @@ fn an_empty_collection_says_so_under_the_rule() {
     // A blank row, then the sentence, indented three characters — not centred.
     assert_eq!(panel_row(buffer, FIRST_BODY_ROW).trim(), "");
     let sentence = panel_row(buffer, FIRST_BODY_ROW + 1);
-    assert_eq!(sentence, format!("{:<57}", "   No records yet."));
-
-    // `n` is T9's: a screen may not name a key that does nothing (SPEC-006 Q4).
-    assert!(!sentence.contains("Press n"));
+    // `n` now opens the editor, so the screen may name it (SPEC-008 frame K).
+    assert_eq!(
+        sentence,
+        format!(
+            "{:<57}",
+            "   No records yet.  Press n to create the first one."
+        )
+    );
 }
 
 #[test]
