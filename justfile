@@ -44,7 +44,7 @@ sandbox:
     sandbox=/tmp/pressa-sandbox
 
     rm -rf "$sandbox"
-    mkdir -p "$sandbox"/{empty,blog,broken,deep/a/b/c}
+    mkdir -p "$sandbox"/{empty,blog,posts,broken,deep/a/b/c}
 
     # A wrapper rather than a copy of the binary: it rebuilds first, so the
     # sandbox always runs the working copy rather than yesterday's build.
@@ -58,6 +58,13 @@ sandbox:
     # The good schema is the example itself, so the sandbox cannot drift from it.
     cp "$repo/examples/blog/pressa.yaml" "$sandbox/blog/pressa.yaml"
     cp "$repo/examples/blog/pressa.yaml" "$sandbox/deep/pressa.yaml"
+
+    # `posts/` is the same schema with one line changed: `list_columns` widened
+    # so every cell renderer is on screen at once. The fields stay
+    # single-sourced from the example, so only the line being demonstrated can
+    # drift. `sed` to a new file rather than `-i`, which differs on BSD and GNU.
+    sed 's/^    list_columns: .*/    list_columns: [title, status, views, featured, published_at, metadata]/' \
+        "$repo/examples/blog/pressa.yaml" > "$sandbox/posts/pressa.yaml"
 
     cat > "$sandbox/broken/pressa.yaml" <<'YAML'
     project:
@@ -88,7 +95,8 @@ sandbox:
     | Directory | Holds | For |
     |---|---|---|
     | `empty/` | nothing | `init` from scratch |
-    | `blog/` | a copy of `examples/blog/pressa.yaml` | `validate`, `dev`, the TUI, the log, `data.db` |
+    | `blog/` | a copy of `examples/blog/pressa.yaml`, no records | `validate`, `dev`, the empty list, the log, `data.db` |
+    | `posts/` | the same schema, wider `list_columns`, 20 records | the table: every cell renderer, scrolling, `g`/`G`, `r` |
     | `broken/` | a schema with `type: relation` | an error naming the YAML path |
     | `deep/` | `pressa.yaml` at the top, empty `a/b/c` | discovery walking up, the way git finds `.git` |
 
@@ -110,6 +118,79 @@ sandbox:
         cd ../broken && ../pressa validate    # exit 1: collections.posts.fields[3].type ...
         cd ../deep/a/b/c && ../../../../pressa validate   # finds the project in deep/
 
+    ## The list view
+
+    Two directories, two halves of T8.
+
+    `blog/` has the schema and no records, so `Enter` on `Posts` draws the
+    header row and then says why the body is empty:
+
+        ┌ pressa › Posts ──────────────────────────────── 0 records ───┐
+        │ Collections   │  TITLE           STATUS          VIEWS      │
+        │               │ ──────────────────────────────────────────  │
+        │ > Posts       │                                             │
+        │               │   No records yet.                           │
+
+    `posts/` is the same schema with one line changed — `list_columns` widened
+    to every field the table can draw — and twenty records in it:
+
+        cd posts && ../pressa dev
+
+        ┌ pressa › Posts ─────────────────────────────────────────────────────────────────── 20 records ───┐
+        ├────────────────────┬─────────────────────────────────────────────────────────────────────────────┤
+        │ Collections        │  TITLE           STATUS      VIEWS    FEATURED  PUBLISHED AT       METADATA │
+        │                    │ ─────────────────────────────────────────────────────────────────────────── │
+        │ > Posts            │ ▸Hello world     draft       1        ✓         2026-09-02 01:01   {2}      │
+        │                    │  About page      published   4        ·         2026-09-03 02:02   {2}      │
+        │                    │  Release notes   draft       —        ·         —                  —        │
+        │                    │  Title 04        published   16       ·         2026-09-05 04:04   {2}      │
+
+    Six columns want about 100 of them. At 80 they all still fit, because every
+    column keeps at least six characters and the rest ends in `…`:
+
+        │ Collections        │  TITLE       STATUS   VIEWS   FEATU…  PUBLISHE…  METAD… │
+        │ > Posts            │ ▸Hello wor…  draft    1       ✓       2026-09-…  {2}    │
+
+    That is the rule, not a defect: nothing is clipped silently. A cell too
+    wide for its column ends in `…`, and a column that cannot have its six
+    characters is dropped and counted — `+3` at the end of the header row.
+
+    What the frames are showing:
+
+    | Thing | Where it comes from |
+    |---|---|
+    | The columns, and their order | `list_columns` in `pressa.yaml` — this is the only line `posts/pressa.yaml` changes |
+    | The header text | each field's `label`, uppercased |
+    | `20 records` | the records that loaded; absent from the title when the load failed |
+    | `▸` and the reversed row | the selection |
+    | `—` | a field this record has no value for |
+    | `✓` / `·` | a `boolean`, true / false |
+    | `2026-09-02 01:01` | a `datetime`: the stored RFC 3339 string's first 16 characters, never a relative time |
+    | `{2}` | a `json` object, and how many keys it has |
+    | `↓ 6 more` | records below the panel — scroll down to see them |
+
+    Keys in the list: `j`/`k` or `↑`/`↓` move, `g`/`G` jump to the ends,
+    `Ctrl+D`/`Ctrl+U` move by ten, `r` reloads, and `Esc`/`h`/`←`/`q` goes
+    back. Only the first and last are in the hint bar; `?` lists the rest once
+    T11 builds the help overlay.
+
+    ## Try changing the schema
+
+    The table is generated from `pressa.yaml` and from nothing else, so this
+    needs no rebuild of anything but the config:
+
+        cd posts
+        $EDITOR pressa.yaml      # reorder list_columns, or cut it to [title]
+        ../pressa dev            # the table changed
+
+    Add a field to `fields` and name it in `list_columns` and a column appears;
+    rename a `label` and the header follows it. There is no per-collection code
+    to edit — one renderer draws them all.
+
+    The frames above are what this recipe printed when it was last changed.
+    `just sandbox` regenerates the directories and reseeds `posts/`, so if what
+    you see differs, the recipe is stale and that is a finding.
+
     ## Exit codes
 
         ./pressa validate --project blog; echo $?               # 0
@@ -128,5 +209,9 @@ sandbox:
 
         just sandbox
     MD
+
+    # Records, so that `dev` has a table to draw and not just a header row.
+    # An example target and not a subcommand — see `pressa-tui/examples/seed.rs`.
+    cargo run --quiet -p pressa-tui --example seed -- "$sandbox/posts" 20
 
     echo "sandbox ready: $sandbox (see its README.md)"

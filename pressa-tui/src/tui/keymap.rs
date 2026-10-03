@@ -113,6 +113,71 @@ pub static KEYMAP: &[KeyBinding] = &[
     },
     KeyBinding {
         context: Context::List,
+        key: plain(KeyCode::Char('j')),
+        command: Command::MoveDown,
+        description: "Navigate",
+        hint: Hint::ShownAs("↑↓"),
+    },
+    KeyBinding {
+        context: Context::List,
+        key: plain(KeyCode::Down),
+        command: Command::MoveDown,
+        description: "Navigate",
+        hint: Hint::Hidden,
+    },
+    KeyBinding {
+        context: Context::List,
+        key: plain(KeyCode::Char('k')),
+        command: Command::MoveUp,
+        description: "Navigate",
+        hint: Hint::Hidden,
+    },
+    KeyBinding {
+        context: Context::List,
+        key: plain(KeyCode::Up),
+        command: Command::MoveUp,
+        description: "Navigate",
+        hint: Hint::Hidden,
+    },
+    KeyBinding {
+        context: Context::List,
+        key: plain(KeyCode::Char('g')),
+        command: Command::GoToTop,
+        description: "Top",
+        hint: Hint::Hidden,
+    },
+    // `G` and not `Shift+g`: `modifiers` drops SHIFT on a character, because
+    // the character already carries the case.
+    KeyBinding {
+        context: Context::List,
+        key: plain(KeyCode::Char('G')),
+        command: Command::GoToBottom,
+        description: "Bottom",
+        hint: Hint::Hidden,
+    },
+    KeyBinding {
+        context: Context::List,
+        key: ctrl('d'),
+        command: Command::PageDown,
+        description: "Page down",
+        hint: Hint::Hidden,
+    },
+    KeyBinding {
+        context: Context::List,
+        key: ctrl('u'),
+        command: Command::PageUp,
+        description: "Page up",
+        hint: Hint::Hidden,
+    },
+    KeyBinding {
+        context: Context::List,
+        key: plain(KeyCode::Char('r')),
+        command: Command::Refresh,
+        description: "Reload",
+        hint: Hint::Hidden,
+    },
+    KeyBinding {
+        context: Context::List,
         key: plain(KeyCode::Esc),
         command: Command::Back,
         description: "Back",
@@ -171,8 +236,9 @@ fn in_context(context: Context, key: KeyEvent) -> Option<Command> {
     KEYMAP
         .iter()
         .find(|binding| binding.context == context && matches(binding.key, key))
-        // `Command` is `Copy`, so the found binding is not borrowed any further.
-        .map(|binding| binding.command)
+        // Cloned because `Command` is no longer `Copy` (`RecordsLoaded` owns a
+        // `Vec`). Every key in the table is a unit variant, so this is free.
+        .map(|binding| binding.command.clone())
 }
 
 /// A key matches a binding when the code and the modifiers are equal.
@@ -265,6 +331,33 @@ mod tests {
     }
 
     #[test]
+    fn the_list_resolves_every_key_it_offers() {
+        for key in [press('j'), plain(KeyCode::Down)] {
+            assert_eq!(resolve(Context::List, key), Some(Command::MoveDown));
+        }
+        for key in [press('k'), plain(KeyCode::Up)] {
+            assert_eq!(resolve(Context::List, key), Some(Command::MoveUp));
+        }
+        assert_eq!(resolve(Context::List, press('g')), Some(Command::GoToTop));
+        assert_eq!(
+            resolve(Context::List, press('G')),
+            Some(Command::GoToBottom)
+        );
+        assert_eq!(resolve(Context::List, ctrl('d')), Some(Command::PageDown));
+        assert_eq!(resolve(Context::List, ctrl('u')), Some(Command::PageUp));
+        assert_eq!(resolve(Context::List, press('r')), Some(Command::Refresh));
+    }
+
+    #[test]
+    fn a_lowercase_g_and_an_uppercase_g_are_different_keys() {
+        // `modifiers` drops SHIFT on a character, so `Shift+g` has to arrive as
+        // the character `G` and resolve to the other end of the list.
+        let shifted = KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT);
+        assert_eq!(resolve(Context::List, shifted), Some(Command::GoToBottom));
+        assert_eq!(resolve(Context::List, press('g')), Some(Command::GoToTop));
+    }
+
+    #[test]
     fn a_list_goes_back_on_the_key_that_quits_at_home() {
         for key in [
             plain(KeyCode::Esc),
@@ -321,23 +414,25 @@ mod tests {
             }
             assert_eq!(
                 resolve(binding.context, binding.key),
-                Some(binding.command),
+                // Cloned: `Command` is no longer `Copy`.
+                Some(binding.command.clone()),
                 "a visible hint names a key that resolves to something else"
             );
         }
     }
 
     #[test]
-    fn the_sidebar_shows_three_hints_and_a_list_shows_one() {
+    fn the_sidebar_shows_three_hints_and_a_list_shows_two() {
         let sidebar = hints(Context::Sidebar);
         assert_eq!(sidebar.len(), 3, "hints were: {sidebar:?}");
         assert!(sidebar[0].starts_with("↑↓ "));
         assert!(sidebar[1].starts_with("Enter "));
         assert!(sidebar[2].starts_with("q "));
 
+        // The list's navigation keys read as one entry, and `g`, `G`, `Ctrl+D`,
+        // `Ctrl+U` and `r` are `Hidden`: two entries, not seven.
         let list = hints(Context::List);
-        assert_eq!(list.len(), 1, "hints were: {list:?}");
-        assert!(list[0].starts_with("Esc "));
+        assert_eq!(list, ["↑↓ Navigate", "Esc Back"], "hints were: {list:?}");
     }
 
     #[test]

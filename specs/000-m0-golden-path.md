@@ -147,9 +147,18 @@ Every screen the scenario reaches, at exactly 80×24 — the size the `insta`
 snapshots are taken at. The frames are normative for layout, wording and field
 order. Two details in them are drawn from behaviour that spec
 [008](008-record-editor.md) owns and must match whatever 008 settles on: the
-`↑ n more` / `↓ n more` scroll markers, and how an empty `Select` renders
-(drawn here as `‹ — ›`, following the dim `—` used for absent values in
-[`tui.md`](../docs/tui.md) §5.2).
+`↑ n more` / `↓ n more` scroll markers in the *editor*, and how an empty
+`Select` renders (drawn here as `‹ — ›`, following the dim `—` used for absent
+values in [`tui.md`](../docs/tui.md) §5.2).
+
+The table rows of frames B, F, H, I and J are not drawn by hand: their column
+widths, header row, rule, marker column and record count come from the
+algorithm in [007](007-list-view.md) "The table, stated once", and were
+regenerated from it on 2026-10-03 when that spec was approved (SPEC-007, Q4).
+The hint bars of those five frames were joined with two spaces until the same
+date, which [006](006-tui-shell.md) Q5 had already recorded as T8's to fix;
+they are three spaces now, like every other frame in this spec. The editor
+frames C, D, E and G still carry the two-space form and belong to T9.
 
 ### A — Home (step 3)
 
@@ -190,7 +199,7 @@ the rule and the frames were reconciled (SPEC-006, Q5).
 ```text
 ┌ pressa › Posts ──────────────────────────────────────────────── 0 records ───┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
-│ Collections        │  TITLE                  STATUS         VIEWS            │
+│ Collections        │  TITLE              STATUS             VIEWS            │
 │                    │ ─────────────────────────────────────────────────────── │
 │ > Posts            │                                                         │
 │                    │   No records yet.  Press n to create the first one.     │
@@ -210,12 +219,15 @@ the rule and the frames were reconciled (SPEC-006, Q5).
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ ↑↓ Navigate  Enter Edit  n New  d Delete  / Search  Esc Back  ? Help         │
+│ ↑↓ Navigate   Enter Edit   n New   d Delete   / Search   Esc Back   ? Help   │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 Three columns, because `list_columns` names three. The table appends no
-implicit column of its own ([`tui.md`](../docs/tui.md) §5.2).
+implicit column of its own ([`tui.md`](../docs/tui.md) §5.2). With no records
+loaded, the headers are the only content the widths can be proportional to, so
+the three columns come out 17, 17 and 16 wide; frames F and H, which have a
+record, are split differently.
 
 ### C — New record, blank (step 5)
 
@@ -326,9 +338,9 @@ returned from `EditorInput`.
 ```text
 ┌ pressa › Posts ───────────────────────────────────────────────── 1 record ───┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
-│ Collections        │  TITLE                  STATUS         VIEWS            │
+│ Collections        │  TITLE                   STATUS             VIEWS       │
 │                    │ ─────────────────────────────────────────────────────── │
-│ > Posts            │ ▸Hello world           published         42             │
+│ > Posts            │ ▸Hello world             published          42          │
 │                    │                                                         │
 │                    │                                                         │
 │                    │                                                         │
@@ -346,7 +358,7 @@ returned from `EditorInput`.
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │ Record saved.                                                                │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ ↑↓ Navigate  Enter Edit  n New  d Delete  / Search  Esc Back  ? Help         │
+│ ↑↓ Navigate   Enter Edit   n New   d Delete   / Search   Esc Back   ? Help   │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -386,9 +398,9 @@ No unsaved indicator in the header: a draft loaded from storage starts clean.
 ```text
 ┌ pressa › Posts ───────────────────────────────────────────────── 1 record ───┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
-│ Collections        │  TITLE                  STATUS         VIEWS            │
+│ Collections        │  TITLE                     STATUS            VIEWS      │
 │                    │ ─────────────────────────────────────────────────────── │
-│ > Posts            │ ▸Hello, world!         published         42             │
+│ > Posts            │ ▸Hello, world!             published         42         │
 │                    │                                                         │
 │                    │                                                         │
 │                    │                                                         │
@@ -406,7 +418,7 @@ No unsaved indicator in the header: a draft loaded from storage starts clean.
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │ Record saved.                                                                │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ ↑↓ Navigate  Enter Edit  n New  d Delete  / Search  Esc Back  ? Help         │
+│ ↑↓ Navigate   Enter Edit   n New   d Delete   / Search   Esc Back   ? Help   │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -418,9 +430,9 @@ on the restart path, since no action has been taken yet in that session.
 ```text
 ┌ pressa › Posts ───────────────────────────────────────────────── 1 record ───┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
-│ Collections        │  TITLE                  STATUS         VIEWS            │
+│ Collections        │  TITLE                     STATUS            VIEWS      │
 │                    │ ─────────────────────────────────────────────────────── │
-│ > Posts            │ ▸Hello, world!         published         42             │
+│ > Posts            │ ▸Hello, world!             published         42         │
 │                    │                                                         │
 │                    │                                                         │
 │                    │                                                         │
@@ -451,7 +463,7 @@ text belongs to spec 009 (T10), which owns this overlay.
 ```text
 ┌ pressa › Posts ──────────────────────────────────────────────── 0 records ───┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
-│ Collections        │  TITLE                  STATUS         VIEWS            │
+│ Collections        │  TITLE              STATUS             VIEWS            │
 │                    │ ─────────────────────────────────────────────────────── │
 │ > Posts            │                                                         │
 │                    │   No records yet.  Press n to create the first one.     │
@@ -471,7 +483,7 @@ text belongs to spec 009 (T10), which owns this overlay.
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │ Record deleted.                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ ↑↓ Navigate  Enter Edit  n New  d Delete  / Search  Esc Back  ? Help         │
+│ ↑↓ Navigate   Enter Edit   n New   d Delete   / Search   Esc Back   ? Help   │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 

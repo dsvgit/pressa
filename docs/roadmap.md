@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: Approved · Last updated: 2026-09-09
+Status: Approved · Last updated: 2026-10-03
 
 ## 1. Milestones
 
@@ -22,20 +22,22 @@ has a place to point at.
 Vertical, not layered — see [ADR-0007](adr/0007-vertical-slice-first.md). After
 T9 the Golden Path works end to end; T10–T12 make it comfortable.
 
-| # | Task | Crates | Spec | Key acceptance |
-|---|---|---|---|---|
-| T1 | Skeleton: workspace, 4 crates, justfile, CI, tracing to file | all | — | `just ci` green on an empty workspace |
-| T2 | Load `pressa.yaml` → `Schema`; project discovery | core, app | [001](../specs/001-schema-config.md) | Unknown field type / duplicate name / bad `list_columns` produce an error naming the path |
-| T3 | Record validation against the schema | core | [002](../specs/002-record-validation.md) | Errors are `Vec<FieldError>` with a `code`, one per offending field |
-| T4 | SQLite: migrations, `SqliteRepository`, `MemoryRepository` | storage | [003](../specs/003-storage-repository.md) | Shared contract suite passes against both implementations |
-| T5 | `RecordService`, `CollectionService`, `AppError` | app | [004](../specs/004-app-services.md) | Integration test: load → create → list → update → delete |
-| T6 | CLI: `pressa init`, `pressa dev`, `pressa validate` | tui | [005](../specs/005-cli.md) | `assert_cmd`: `init` writes `pressa.yaml` and `.pressa/`; `validate` exits non-zero on a bad schema |
-| T7 | TUI shell: terminal guard, layout, sidebar, breadcrumbs, hint bar, keymap | tui, app | [006](../specs/006-tui-shell.md) | 80×24 snapshot of Home; terminal restores on panic |
-| T8 | List view: table from `list_columns`, navigation, empty state | tui | [007](../specs/007-list-view.md) | Snapshots before and after two `j`; `Enter` emits `EditRecord` |
-| T9 | Record editor: form from schema, 7 editors, dirty state, save, errors | tui | [008](../specs/008-record-editor.md) | **Closes the Golden Path** — a saved record survives a restart |
-| T10 | Create (`n`), delete (`d`) with confirmation | tui | 009 | Deletion is impossible without confirming; selection stays valid afterwards |
-| T11 | Search `/` and help overlay `?` | tui | 010 | Help is generated from the keymap, not written by hand |
-| T12 | `examples/blog`, README, end-to-end Golden Path test | — | [000](../specs/000-m0-golden-path.md) | Spec 000 passes automatically |
+The `✓` column is the work that has landed on `main`.
+
+| # | ✓ | Task | Crates | Spec | Key acceptance |
+|---|---|---|---|---|---|
+| T1 | ✓ | Skeleton: workspace, 4 crates, justfile, CI, tracing to file | all | — | `just ci` green on an empty workspace |
+| T2 | ✓ | Load `pressa.yaml` → `Schema`; project discovery | core, app | [001](../specs/001-schema-config.md) | Unknown field type / duplicate name / bad `list_columns` produce an error naming the path |
+| T3 | ✓ | Record validation against the schema | core | [002](../specs/002-record-validation.md) | Errors are `Vec<FieldError>` with a `code`, one per offending field |
+| T4 | ✓ | SQLite: migrations, `SqliteRepository`, `MemoryRepository` | storage | [003](../specs/003-storage-repository.md) | Shared contract suite passes against both implementations |
+| T5 | ✓ | `RecordService`, `CollectionService`, `AppError` | app | [004](../specs/004-app-services.md) | Integration test: load → create → list → update → delete |
+| T6 | ✓ | CLI: `pressa init`, `pressa dev`, `pressa validate` | tui | [005](../specs/005-cli.md) | `assert_cmd`: `init` writes `pressa.yaml` and `.pressa/`; `validate` exits non-zero on a bad schema |
+| T7 | ✓ | TUI shell: terminal guard, layout, sidebar, breadcrumbs, hint bar, keymap | tui, app | [006](../specs/006-tui-shell.md) | 80×24 snapshot of Home; terminal restores on panic |
+| T8 | ✓ | List view: table from `list_columns`, navigation, empty state | tui | [007](../specs/007-list-view.md) | Snapshots before and after two `j`; a second collection renders through the same function; `Effect` becomes inhabited and `run_effects` exists |
+| T9 |   | Record editor: form from schema, 7 editors, dirty state, save, errors; the `Enter` and `n` bindings and the `New`/`Edit` routes that reach it ([007](../specs/007-list-view.md) Q2) | tui | [008](../specs/008-record-editor.md) | **Closes the Golden Path** — a saved record survives a restart |
+| T10 |   | Create (`n`), delete (`d`) with confirmation | tui | 009 | Deletion is impossible without confirming; selection stays valid afterwards |
+| T11 |   | Search `/` and help overlay `?` | tui | 010 | Help is generated from the keymap, not written by hand |
+| T12 |   | `examples/blog`, README, end-to-end Golden Path test | — | [000](../specs/000-m0-golden-path.md) | Spec 000 passes automatically |
 
 Specs 009 and 010 are written when T10 and T11 start — see
 [`development.md`](development.md) §3.

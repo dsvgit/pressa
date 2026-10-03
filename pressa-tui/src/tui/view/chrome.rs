@@ -14,13 +14,32 @@ use crate::tui::view::{MIN_HEIGHT, MIN_WIDTH, SIDEBAR_WIDTH, centred};
 /// The hint bar joins its entries with three spaces (SPEC-006 "Hints").
 const HINT_SEPARATOR: &str = "   ";
 
+/// How many `─` sit between the right-aligned title segment and the corner.
+const TITLE_MARGIN: u16 = 3;
+
 /// Border, title and the three separator rules.
-pub fn shell(frame: &mut Frame, area: Rect, title: &str) {
+///
+/// `right` is the segment the list view puts at the other end of the top edge —
+/// its record count. It is dropped rather than overlapped when the breadcrumbs
+/// reach it: the breadcrumbs say where you are, which matters more than a count
+/// (SPEC-007 "The table, stated once").
+pub fn shell(frame: &mut Frame, area: Rect, title: &str, right: Option<&str>) {
     // The outer box first: corners, the title on the top edge, and the walls.
     frame.render_widget(Block::bordered().title(Line::from(title.to_string())), area);
 
     let divider = area.x + 1 + SIDEBAR_WIDTH;
     let buffer = frame.buffer_mut();
+
+    if let Some(segment) = right {
+        // Measured in characters, not bytes: `─` is three bytes and one column.
+        let width = segment.chars().count() as u16;
+        let x = area.right().saturating_sub(1 + TITLE_MARGIN + width);
+        // The title starts one column in from the corner; `>` and not `>=` so
+        // the two never share a column.
+        if x > area.x + 1 + title.chars().count() as u16 {
+            buffer.set_string(x, area.y, segment, Style::new());
+        }
+    }
 
     // The divider between sidebar and main panel, down the body only.
     for y in (area.y + 2)..(area.bottom() - 5) {

@@ -13,8 +13,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use pressa_app::RecordService;
 use pressa_app::config::load_schema;
-use pressa_app::domain::Schema;
+use pressa_app::domain::{Json, Record, RecordRepository, Schema};
+use pressa_storage::MemoryRepository;
 
 /// Bumped per tree so two trees in the same process never collide.
 static COUNTER: AtomicU32 = AtomicU32::new(0);
@@ -101,4 +103,39 @@ pub fn schema_from_yaml(label: &str, yaml: &str) -> Schema {
 /// the frames cannot drift apart.
 pub fn example_schema() -> Schema {
     load_schema(&example_schema_path()).expect("the example schema is valid")
+}
+
+/// The records of `documents`, created in order through the service layer.
+///
+/// Through `RecordService::create` and never by hand: `pressa-tui` cannot build
+/// a `Record` — it has no `pressa-core` dependency — and should not be able to
+/// (SPEC-007 "Tests"). `documents` are JSON texts, parsed through the `Json`
+/// `pressa_app::domain` re-exports, so no test names `serde_json` either.
+pub fn records(schema: &Schema, collection: &str, documents: &[&str]) -> Vec<Record> {
+    // The schema is cloned because the service owns one: services never re-read
+    // `pressa.yaml`.
+    let service = RecordService::new(MemoryRepository::new(), schema.clone());
+
+    documents
+        .iter()
+        .map(|document| {
+            let data: Json = document.parse().expect("the fixture document is JSON");
+            service
+                .create(collection, data)
+                .expect("the fixture document satisfies the schema")
+        })
+        .collect()
+}
+
+/// A record whose `data` is whatever `document` says, valid or not.
+///
+/// Straight through the repository, which stores `data` verbatim and does not
+/// validate (SPEC-003) — the only way to get the bad row the table must still
+/// draw. The service would refuse it, which is the service's job.
+pub fn unvalidated_record(collection: &str, document: &str) -> Record {
+    let repository = MemoryRepository::new();
+    let data: Json = document.parse().expect("the fixture document is JSON");
+    repository
+        .create(collection, data)
+        .expect("storage stores what it is given")
 }
