@@ -1,6 +1,6 @@
 # Terminal UI
 
-Status: Approved · Last updated: 2026-09-09 · Crate: `pressa-tui`
+Status: Approved · Last updated: 2026-10-03 · Crate: `pressa-tui`
 
 ## 1. State model
 
@@ -37,6 +37,24 @@ pub enum Overlay {
 top* of the current route; it is separate from `Route` because dismissing a
 help popup must not change where you are.
 
+```rust
+pub struct ListState {
+    pub records: Vec<Record>,
+    pub selected: usize,
+    pub offset: usize,
+    pub load: Load,
+}
+
+/// Whether `records` is the collection's or the remains of a load that failed.
+/// Two variants and not three: effects are synchronous (ADR-0002), so the
+/// queue drains before the next draw and a `Loading` state is unobservable.
+pub enum Load { Ok, Failed }
+```
+
+`Load::Failed` is why the table can say "could not load" instead of claiming a
+collection is empty, and why `Failed` with a non-empty `records` is a state the
+code must not produce ([`specs/007`](../specs/007-list-view.md)).
+
 ### The loop
 
 ```
@@ -51,6 +69,9 @@ crossterm event
 pub fn update(state: &mut AppState, cmd: Command) -> Vec<Effect>;
 
 pub enum Effect {
+    /// `params` arrives with T11, which gives it a value. Until then the
+    /// variant is `{ collection }` and `pressa-tui` names no `ListParams`
+    /// ([`specs/007`](../specs/007-list-view.md) "Domain model").
     LoadRecords { collection: String, params: ListParams },
     LoadRecord  { collection: String, id: RecordId },
     SaveRecord  { collection: String, id: Option<RecordId>, data: serde_json::Value },
@@ -155,7 +176,7 @@ possible. See [ADR-0005](adr/0005-command-and-keymap-architecture.md).
 | List | `d` | DeleteRecord → ConfirmDelete | yes |
 | List | `/` | OpenSearch | yes |
 | List | `r` | Refresh | no |
-| List | `h` / `←` / `Esc` | FocusSidebar | yes (as `Esc Back`) |
+| List | `h` / `←` / `Esc` | Back | yes (as `Esc Back`) |
 | List | `q` | Back | — |
 | Editor | `Tab` / `j` | NextField | yes |
 | Editor | `Shift+Tab` / `k` | PrevField | — |
@@ -177,6 +198,13 @@ resolution stays a table lookup (SPEC-006, "The keymap").
 Two modes inside the editor — `Editor` navigates between fields, `EditorInput`
 types into one — is the vim distinction, and it is what keeps `j` usable for
 navigation without stealing it from text.
+
+`FocusSidebar` and `FocusMain` are listed in `Command` above and bound to
+nothing: T7 resolved a list's `h` / `←` / `Esc` to `Back`, and nothing in M0
+needs focus to move without the route moving
+([`specs/007`](../specs/007-list-view.md) "Non-goals"). `PageUp` / `PageDown`
+move by a compiled-in page of 10 rows, because `update` cannot see the panel's
+height and `view` may not write to state (SPEC-007, Q3).
 
 ## 4. Layout
 
@@ -239,14 +267,34 @@ message rather than a broken layout.
 
 Columns come from `list_columns` — exactly those fields, in that order, with
 no implicit extra column appended. Column widths are proportional to content
-with a minimum of 6 and an ellipsis on overflow. Boolean renders as `✓` / `·`,
-`Json` renders as `{…}` with the key count, `Null` renders as a dim `—`.
+with a minimum of 6 and an ellipsis on overflow; the exact arithmetic, the
+two-space gap, the marker column, the `↑ n more` scrolling and the `+k` the
+header ends with when a column cannot fit are specified once, in
+[`specs/007`](../specs/007-list-view.md) "The table, stated once". Every cell
+and header is left-aligned, numbers included, so that one rendering path serves
+all seven field types (SPEC-007, Q5).
+
+Boolean renders as `✓` / `·`, `Json` as `{n}` with the key count (`[n]` for an
+array), a `DateTime` as the stored RFC 3339 string's first 16 characters with
+the `T` replaced by a space — `2026-09-06 12:00`, never a relative time, which
+would need a clock `view` may not read (SPEC-007, Q1) — and an absent or null
+value as a dim `—`. A value whose JSON type its field does not allow renders as
+its own JSON text, dim: storage does not validate, so the table shows what is
+there.
+
+The record count sits right-aligned in the window title, three `─` from the
+corner, and is omitted when the load failed.
 
 Empty state replaces the table body with:
 
 ```
    No records yet.  Press n to create the first one.
 ```
+
+T8 renders the first sentence alone; the second arrives with T9, which binds
+`n` — a screen may not name a key that does nothing (SPEC-006, Q4). A load that
+failed replaces the body with `Could not load records.  Press r to retry.`
+instead, and the error itself goes to the status line.
 
 ### 5.3 Record editor
 
@@ -320,7 +368,9 @@ No hand-written help text exists anywhere in the codebase.
 - Colours are limited to the terminal's 16-colour palette so themes stay
   readable everywhere. Selection is reverse video, errors are red, hints are
   dim. No truecolour, no background fills.
-- No Unicode beyond box-drawing characters, `✓`, `▸`, `‹›`, `⚠`, `●` and `…`.
+- No Unicode beyond box-drawing characters, `✓`, `·`, `▸`, `‹›`, `⚠`, `●`,
+  `—`, `↑`, `↓` and `…`. The arrows are the scroll summaries the sidebar has
+  drawn since T7; `·` is a false boolean and `—` an absent value.
 - Every panel that can overflow scrolls; nothing is ever clipped silently.
 
 ## 7. Terminal lifecycle
