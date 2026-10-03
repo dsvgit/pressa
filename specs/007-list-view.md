@@ -84,6 +84,11 @@ The frames are the approved ones: the five questions this spec was drafted
 with were answered on 2026-10-03 and are recorded under "Decisions taken".
 Nothing in them is provisional.
 
+> **Retaken by T9** ([SPEC-008](008-record-editor.md) frame K), as Q2 said it
+> would be: `Enter` and `n` now do something, so every hint bar gains
+> `Enter Edit   n New`, and frame A's empty state gains its second sentence,
+> `Press n to create the first one.` Nothing else in any frame moved.
+
 ### The table, stated once
 
 The main panel is 57x17 at 80x24 and 37x9 at the 60x16 minimum
@@ -144,7 +149,7 @@ rows                                   columns (panel width P)
 │ Collections        │  TITLE              STATUS             VIEWS            │
 │                    │ ─────────────────────────────────────────────────────── │
 │ > Posts            │                                                         │
-│                    │   No records yet.                                       │
+│                    │   No records yet.  Press n to create the first one.     │
 │                    │                                                         │
 │                    │                                                         │
 │                    │                                                         │
@@ -161,7 +166,7 @@ rows                                   columns (panel width P)
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ ↑↓ Navigate   Esc Back                                                       │
+│ ↑↓ Navigate   Enter Edit   n New   Esc Back                                  │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -198,7 +203,7 @@ The movement fixture: `posts` with `Hello world` (draft, 0 views),
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ ↑↓ Navigate   Esc Back                                                       │
+│ ↑↓ Navigate   Enter Edit   n New   Esc Back                                  │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -231,7 +236,7 @@ split in. `—` is the absent `views` of the third record.
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ ↑↓ Navigate   Esc Back                                                       │
+│ ↑↓ Navigate   Enter Edit   n New   Esc Back                                  │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -267,7 +272,7 @@ A fixture collection whose `list_columns` is
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ ↑↓ Navigate   Esc Back                                                       │
+│ ↑↓ Navigate   Enter Edit   n New   Esc Back                                  │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -310,7 +315,7 @@ Per field type, where `value` is `Record.data[field.name]`:
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ ↑↓ Navigate   Esc Back                                                       │
+│ ↑↓ Navigate   Enter Edit   n New   Esc Back                                  │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -342,7 +347,7 @@ below it, so fourteen records and one summary are shown.
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ ↑↓ Navigate   Esc Back                                                       │
+│ ↑↓ Navigate   Enter Edit   n New   Esc Back                                  │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -373,7 +378,7 @@ below it, so fourteen records and one summary are shown.
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │ ⚠ database error: disk I/O error                                             │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ ↑↓ Navigate   Esc Back                                                       │
+│ ↑↓ Navigate   Enter Edit   n New   Esc Back                                  │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -399,7 +404,7 @@ the key that retries, and the error itself is the status line's job — one
 ├────────────────────┴─────────────────────────────────────┤
 │                                                          │
 ├──────────────────────────────────────────────────────────┤
-│ ↑↓ Navigate   Esc Back                                   │
+│ ↑↓ Navigate   Enter Edit   n New   Esc Back              │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -423,7 +428,7 @@ four columns fit at 6 characters each, and the header says so.
 ├────────────────────┴─────────────────────────────────────┤
 │                                                          │
 ├──────────────────────────────────────────────────────────┤
-│ ↑↓ Navigate   Esc Back                                   │
+│ ↑↓ Navigate   Enter Edit   n New   Esc Back              │
 └──────────────────────────────────────────────────────────┘
 ```
 

@@ -8,6 +8,7 @@
 use std::path::PathBuf;
 
 use indexmap::IndexMap;
+use serde_json::{Map, Value as Json};
 
 /// The pattern every collection slug and field name must match.
 ///
@@ -113,6 +114,32 @@ impl FieldType {
     ];
 }
 
+/// The field defaults for a new record, from the schema alone.
+///
+/// Every field key is present, so the editor never has to invent the shape of
+/// a document. A boolean has no "unset", so it starts `false`; everything else
+/// starts `null` — a required `Select` included, so a blank form cannot pass
+/// validation on a choice the user never made (SPEC-004 "Behaviour"). Pure: no
+/// I/O and no repository, which is what lets the UI's `update` call it
+/// (SPEC-008 Q2).
+pub fn blank_document(collection: &Collection) -> Json {
+    // `map` turns each field into its (key, default) pair; `collect` builds
+    // the object from them.
+    let document: Map<String, Json> = collection
+        .fields
+        .iter()
+        .map(|field| {
+            let value = match field.kind {
+                // A boolean has no "unset": an unchecked box is `false`.
+                FieldType::Boolean => Json::Bool(false),
+                _ => Json::Null,
+            };
+            (field.name.clone(), value)
+        })
+        .collect();
+    Json::Object(document)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,5 +163,79 @@ mod tests {
         let capabilities = CollectionCapabilities::default();
         assert!(capabilities.create && capabilities.read);
         assert!(capabilities.update && capabilities.delete);
+    }
+
+    /// A collection with one field of each type, built by hand because the
+    /// loader lives in `pressa-app`.
+    fn seven_types() -> Collection {
+        let field = |name: &str, kind: FieldType| Field {
+            name: name.to_string(),
+            label: name.to_string(),
+            kind,
+            required: true,
+            unique: false,
+        };
+        Collection {
+            slug: "entries".to_string(),
+            label: "Entries".to_string(),
+            fields: vec![
+                field("headline", FieldType::Text),
+                field("notes", FieldType::Textarea),
+                field("hits", FieldType::Number),
+                field("pinned", FieldType::Boolean),
+                field("released_at", FieldType::DateTime),
+                field(
+                    "state",
+                    FieldType::Select {
+                        options: vec!["draft".to_string()],
+                    },
+                ),
+                field("extra", FieldType::Json),
+            ],
+            list_columns: vec!["headline".to_string()],
+            capabilities: CollectionCapabilities::default(),
+        }
+    }
+
+    #[test]
+    fn a_blank_document_has_every_key_false_for_booleans_and_null_otherwise() {
+        let blank = blank_document(&seven_types());
+
+        // `as_object` borrows the map; the document must be one.
+        let object = blank.as_object().expect("a blank document is an object");
+        assert_eq!(object.len(), 7, "one key per field: {blank}");
+        for (key, value) in object {
+            let expected = if key == "pinned" {
+                Json::Bool(false)
+            } else {
+                Json::Null
+            };
+            assert_eq!(value, &expected, "{key} defaulted wrongly");
+        }
+    }
+
+    #[test]
+    fn a_blank_document_has_exactly_the_schemas_field_names() {
+        // Every name is there and no other: nothing added, nothing dropped.
+        // Sorted on both sides because the map does not keep schema order.
+        let collection = seven_types();
+        let blank = blank_document(&collection);
+        let mut keys: Vec<&str> = blank
+            .as_object()
+            .expect("an object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let mut names: Vec<&str> = collection.fields.iter().map(|f| f.name.as_str()).collect();
+        keys.sort_unstable();
+        names.sort_unstable();
+        assert_eq!(keys, names);
+    }
+
+    #[test]
+    fn a_blank_document_is_the_same_every_time() {
+        // Pure: equal input, equal output, and no repository to open.
+        let collection = seven_types();
+        assert_eq!(blank_document(&collection), blank_document(&collection));
     }
 }

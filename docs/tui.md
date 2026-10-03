@@ -37,6 +37,25 @@ pub enum Overlay {
 top* of the current route; it is separate from `Route` because dismissing a
 help popup must not change where you are.
 
+Shipped as of T9: all four `Route` variants, `editor`, `overlay`, and
+`Overlay::ConfirmDiscard`. `ConfirmDelete` arrives with T10, `Help` and
+`Search` with T11 — each adds a variant to an enum that already exists
+([`specs/008`](../specs/008-record-editor.md)).
+
+```rust
+/// The draft, where the focus is, and what the last save refused. One struct
+/// for both `New` and `Edit`.
+pub struct EditorState {
+    pub draft: serde_json::Value,     // every field key present
+    pub original: serde_json::Value,  // dirty is `draft != original`, stored nowhere
+    pub focus: usize,                 // index into `collection.fields`
+    pub offset: usize,
+    pub input: Option<String>,        // `Some` is an input context (§3)
+    pub errors: Vec<FieldError>,      // at most one per field
+    pub id: Option<RecordId>,         // the third crumb's fallback (§2)
+}
+```
+
 ```rust
 pub struct ListState {
     pub records: Vec<Record>,
@@ -79,6 +98,10 @@ pub enum Effect {
 }
 ```
 
+Shipped as of T9: `LoadRecords { collection }`, `LoadRecord` and `SaveRecord`,
+whose `id: None` is a create and `Some` an update. `DeleteRecord` arrives with
+T10's runner for it.
+
 Effects resolve back into commands (`Command::RecordsLoaded(..)`,
 `Command::SaveFailed(Vec<FieldError>)`, …). Keeping I/O out of `update` is what
 lets us test every interaction without a database and without a terminal.
@@ -97,9 +120,17 @@ Even in a terminal, navigation is modelled as paths:
 Breadcrumbs are **derived from the route**, never assembled by hand:
 
 ```rust
-fn breadcrumbs(route: &Route, schema: &Schema) -> Vec<String>
-// Route::Edit{"posts", id} → ["pressa", "Posts", "Edit", "01J8XQ…"]
+fn breadcrumbs(state: &AppState) -> Vec<String>
+// Route::Edit{"posts", id} → ["pressa", "Posts", "Hello world"]
 ```
+
+At `New` and `Edit` the third crumb names the record: the draft's first
+`list_columns` value through the table's cell renderer, cut to 20 characters,
+read live so it follows a rename. When that value is absent it is the id
+shortened to six characters and `…` at `Edit`, and `New` at `New`. A ULID is
+not what a user recognises a record by, so the four-crumb id form this section
+used to promise was dropped ([`specs/008`](../specs/008-record-editor.md) Q8).
+That is why `breadcrumbs` takes the state and not the route alone.
 
 Hand-maintained breadcrumbs drift from actual navigation state within a week.
 Deriving them makes that impossible and makes the header snapshot-testable on
@@ -131,7 +162,7 @@ pub enum Command {
 }
 
 pub struct KeyBinding {
-    pub context: Context,       // Global | Sidebar | List | Editor | EditorInput | Overlay
+    pub context: Context,       // see below
     pub key: KeyEvent,
     pub command: Command,
     pub description: &'static str,
@@ -148,6 +179,21 @@ pub enum Hint {
     ShownAs(&'static str),  // that label instead of the key's own
 }
 ```
+
+```rust
+/// Derived from the state, never stored: overlay first, then `editor.input`,
+/// then the route.
+pub enum Context {
+    Global, Sidebar, List,
+    Editor,          // New / Edit, moving between fields
+    EditorInput,     // typing into a Text, Number or DateTime field
+    EditorText,      // typing into a Textarea or Json field
+    ConfirmDiscard,  // the discard dialog; T10 adds ConfirmDelete
+}
+```
+
+One context per dialog, because `KeyBinding.description` is a fixed string and
+`y Discard` and `y Delete` cannot come from one row (SPEC-008 Q10).
 
 The hint bar is the current context's non-`Hidden` bindings in table order,
 then the non-`Hidden` `Global` ones, joined with three spaces.
@@ -178,26 +224,43 @@ possible. See [ADR-0005](adr/0005-command-and-keymap-architecture.md).
 | List | `r` | Refresh | no |
 | List | `h` / `←` / `Esc` | Back | yes (as `Esc Back`) |
 | List | `q` | Back | — |
-| Editor | `Tab` / `j` | NextField | yes |
+| Editor | `Tab` / `j` | NextField | yes (`Tab`) |
 | Editor | `Shift+Tab` / `k` | PrevField | — |
-| Editor | `Enter` | BeginEdit (text) / ToggleBoolean / NextOption (select) | yes |
+| Editor | `Enter` | BeginEdit — an input context for the five text-shaped types, ToggleBoolean for a `Boolean`, NextOption for a `Select` | yes |
+| Editor | `Space` | ToggleBoolean | — |
+| Editor | `l` / `→` | NextOption | — |
+| Editor | `h` / `←` | PrevOption | — |
 | Editor | `Ctrl+S` | Save | yes |
 | Editor | `Esc` | Back (ConfirmDiscard if dirty) | yes |
 | EditorInput | printable | InputChar | — |
 | EditorInput | `Backspace` | InputBackspace | — |
 | EditorInput | `Enter` | CommitField | yes |
-| EditorInput | `Esc` | CancelEdit — restores the original value | yes |
-| Overlay | `y` / `Enter` | Confirm | yes |
-| Overlay | `n` / `Esc` / `q` | Dismiss | yes |
+| EditorInput | `Esc` | CancelEdit — the draft was never written | yes |
+| EditorText | printable | InputChar | — |
+| EditorText | `Backspace` | InputBackspace | — |
+| EditorText | `Tab` | CommitField | yes |
+| EditorText | `Enter` | InsertNewline | yes |
+| EditorText | `Esc` | CancelEdit | yes |
+| ConfirmDiscard | `y` / `Enter` | Confirm | yes (`y`) |
+| ConfirmDiscard | `n` / `Esc` / `q` | Dismiss | yes (`n`) |
+
+`?`, `d` and `/` are bound by T10 and T11; until then they resolve to nothing,
+except in the two input contexts, where every printable character — `?`
+included — is text.
 
 `q` is two context rows rather than one global row with a branch inside
 `update`: it quits from the sidebar, where there is nowhere left to go back to,
 and goes back from anywhere else. A context binding shadows a global one, so
 resolution stays a table lookup (SPEC-006, "The keymap").
 
-Two modes inside the editor — `Editor` navigates between fields, `EditorInput`
-types into one — is the vim distinction, and it is what keeps `j` usable for
-navigation without stealing it from text.
+Two modes inside the editor — `Editor` navigates between fields, an input
+context types into one — is the vim distinction, and it is what keeps `j`
+usable for navigation without stealing it from text. There are two input
+contexts rather than one so that `Enter` can commit a single-line field and
+insert a newline in a multi-line one while resolution stays a table lookup;
+`Tab` commits the multi-line two (SPEC-008 Q3b). The draft changes only on
+`CommitField` and the per-type commands, so a cancelled edit cannot have
+changed it.
 
 `FocusSidebar` and `FocusMain` are listed in `Command` above and bound to
 nothing: T7 resolved a list's `h` / `←` / `Esc` to `Back`, and nothing in M0
@@ -291,48 +354,73 @@ Empty state replaces the table body with:
    No records yet.  Press n to create the first one.
 ```
 
-T8 renders the first sentence alone; the second arrives with T9, which binds
-`n` — a screen may not name a key that does nothing (SPEC-006, Q4). A load that
+T8 rendered the first sentence alone; T9 bound `n` and added the second — a
+screen may not name a key that does nothing (SPEC-006, Q4). The key is read
+from the keymap, not spelled. A load that
 failed replaces the body with `Could not load records.  Press r to retry.`
 instead, and the error itself goes to the status line.
 
 ### 5.3 Record editor
 
 ```
-┌ pressa › Posts › Edit ────────────────────────────── ● unsaved · Ctrl+S ──┐
-├──────────────┬────────────────────────────────────────────────────────────┤
-│ Collections  │  Title *                                                   │
-│              │  ┌──────────────────────────────────────────────────────┐  │
-│ > Posts      │  │ Hello world                                          │  │
-│   Authors    │  └──────────────────────────────────────────────────────┘  │
-│   Categories │                                                            │
-│              │  Slug *                                                    │
-│              │    hello-world                                             │
-│              │                                                            │
-│              │  Status *        ‹ draft ›                                 │
-│              │                                                            │
-│              │  Featured        [x]                                       │
-│              │                                                            │
-│              │  Views                                                     │
-│              │    0                                                       │
-│              │  ⚠ must be a number                                        │
-│              │                                                            │
-├──────────────┴────────────────────────────────────────────────────────────┤
-│ 1 field needs attention                                                    │
-├───────────────────────────────────────────────────────────────────────────┤
-│ Tab Next  Enter Edit  Ctrl+S Save  Esc Back  ? Help                        │
-└───────────────────────────────────────────────────────────────────────────┘
+┌ pressa › Posts › Hello world ───────────────────────── ● unsaved · Ctrl+S ───┐
+├────────────────────┬─────────────────────────────────────────────────────────┤
+│ Collections        │  Title *                                                │
+│                    │    Hello world                                          │
+│ > Posts            │                                                         │
+│                    │  Slug *                                                 │
+│                    │    hello-world                                          │
+│                    │                                                         │
+│                    │  Status *        ‹ published ›                          │
+│                    │                                                         │
+│                    │  Content                                                │
+│                    │    —                                                    │
+│                    │                                                         │
+│                    │ ▸Views                                                  │
+│                    │    42                                                   │
+│                    │                                                         │
+│                    │  Featured        [ ]                                    │
+│                    │                                                         │
+│                    │  Published at                                 ↓ 1 more  │
+├────────────────────┴─────────────────────────────────────────────────────────┤
+│                                                                              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ Tab Next   Enter Edit   Ctrl+S Save   Esc Back                               │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The focused field is boxed; unfocused fields are drawn as plain values. `*`
-marks required. Validation messages appear directly under their field, which is
-why `FieldError` carries a field name rather than being a string.
+One form renderer, generated from `Collection.fields` and `FieldType` alone.
+In brief:
 
-Per type: `Text` single line, `Textarea` a 5-row box, `Number` a text input
-validated on commit, `Boolean` a `[x]` toggle, `Select` a `‹ value ›` cycler,
-`DateTime` a text input in RFC 3339, `Json` a textarea validated on commit.
+- one block per field in schema order, each followed by a blank row; a label
+  row with ` *` on a required field and `▸` on the focused one;
+- `Select` (`‹ value ›`, `‹ — ›` when empty) and `Boolean` (`[x]` / `[ ]`)
+  inline at the value column — the longest label plus its ` *` and two, never
+  less than 18 — in reverse video when focused; the other five types stacked
+  under their label, indented four;
+- values are the text you would edit: a `DateTime` as its RFC 3339 string, a
+  `Json` field as its JSON text; an absent value is a dim `—`, a value of the
+  wrong JSON type its own JSON text, dim;
+- the focused field is `▸` on its label and a reverse-video bar on its value
+  row — no border, no extra row, so moving the focus moves nothing else; a
+  `Textarea` or `Json` field grows to five wrapped rows only while it is typed
+  into; text being typed shows its tail behind `…`, and `▌` is drawn after it
+  exactly while it is being typed into;
+- an error row `⚠ message`, in red, under any field the last save or commit
+  refused, and `<n> field(s) need attention` on the status line, derived from
+  the errors;
+- the form scrolls by whole fields, the least that keeps the focused block and
+  its trailing blank row whole, with dim `↑ n more` / `↓ n more` counting the
+  fields not drawn at all;
+- the header names the record (§2) and carries ` ● unsaved · Ctrl+S ` while
+  `draft != original`.
 
-### 5.4 Confirm delete
+The rules are stated once, with every frame, in
+[`specs/008`](../specs/008-record-editor.md) "The form, stated once".
+
+### 5.4 Confirm dialogs
+
+Delete, T10's:
 
 ```
               ┌─ Delete record ────────────────────────┐
@@ -343,6 +431,22 @@ validated on commit, `Boolean` a `[x]` toggle, `Select` a `‹ value ›` cycler
               │           y Delete    n Cancel         │
               └────────────────────────────────────────┘
 ```
+
+Discard, T9's — `Esc` on a dirty editor. It names the changes rather than the
+record, so it cannot be mistaken for the delete prompt it is shaped like. Its
+rows are cleared across the panel; the form stays drawn above and below it.
+
+```
+              ┌─ Discard changes ──────────────────────┐
+              │                                        │
+              │  Discard unsaved changes?              │
+              │  This cannot be undone.                │
+              │                                        │
+              │         y Discard    n Cancel          │
+              └────────────────────────────────────────┘
+```
+
+Both key lines come from the keymap, joined with four spaces.
 
 ### 5.5 Search
 
@@ -369,8 +473,9 @@ No hand-written help text exists anywhere in the codebase.
   readable everywhere. Selection is reverse video, errors are red, hints are
   dim. No truecolour, no background fills.
 - No Unicode beyond box-drawing characters, `✓`, `·`, `▸`, `‹›`, `⚠`, `●`,
-  `—`, `↑`, `↓` and `…`. The arrows are the scroll summaries the sidebar has
-  drawn since T7; `·` is a false boolean and `—` an absent value.
+  `—`, `↑`, `↓`, `…` and `▌`. The arrows are the scroll summaries the sidebar has
+  drawn since T7; `·` is a false boolean, `—` an absent value, and `▌` the
+  editor's cursor, drawn only while a field is being typed into.
 - Every panel that can overflow scrolls; nothing is ever clipped silently.
 
 ## 7. Terminal lifecycle

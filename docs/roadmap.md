@@ -34,8 +34,8 @@ The `✓` column is the work that has landed on `main`.
 | T6 | ✓ | CLI: `pressa init`, `pressa dev`, `pressa validate` | tui | [005](../specs/005-cli.md) | `assert_cmd`: `init` writes `pressa.yaml` and `.pressa/`; `validate` exits non-zero on a bad schema |
 | T7 | ✓ | TUI shell: terminal guard, layout, sidebar, breadcrumbs, hint bar, keymap | tui, app | [006](../specs/006-tui-shell.md) | 80×24 snapshot of Home; terminal restores on panic |
 | T8 | ✓ | List view: table from `list_columns`, navigation, empty state | tui | [007](../specs/007-list-view.md) | Snapshots before and after two `j`; a second collection renders through the same function; `Effect` becomes inhabited and `run_effects` exists |
-| T9 |   | Record editor: form from schema, 7 editors, dirty state, save, errors; the `Enter` and `n` bindings and the `New`/`Edit` routes that reach it ([007](../specs/007-list-view.md) Q2) | tui | [008](../specs/008-record-editor.md) | **Closes the Golden Path** — a saved record survives a restart |
-| T10 |   | Create (`n`), delete (`d`) with confirmation | tui | 009 | Deletion is impossible without confirming; selection stays valid afterwards |
+| T9 | ✓ | Record editor: form from schema, 7 editors, dirty state, save, errors; the `Enter` and `n` bindings and the `New`/`Edit` routes that reach it ([007](../specs/007-list-view.md) Q2) | tui | [008](../specs/008-record-editor.md) | **Closes the Golden Path** — a saved record survives a restart |
+| T10 |   | Delete (`d`) with confirmation | tui | 009 | Deletion is impossible without confirming; selection stays valid afterwards |
 | T11 |   | Search `/` and help overlay `?` | tui | 010 | Help is generated from the keymap, not written by hand |
 | T12 |   | `examples/blog`, README, end-to-end Golden Path test | — | [000](../specs/000-m0-golden-path.md) | Spec 000 passes automatically |
 

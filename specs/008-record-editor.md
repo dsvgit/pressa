@@ -1,6 +1,6 @@
 # SPEC-008: Record editor
 
-Status: **Approved** · Task: T9 · Crates: `pressa-tui`, plus one pure function in
+Status: **Implemented** (amended 2026-10-03, Q16) · Task: T9 · Crates: `pressa-tui`, plus one pure function in
 `pressa-core` re-exported through `pressa-app` (Q2)
 · ADRs: [0002](../docs/adr/0002-synchronous-rusqlite.md),
 [0004](../docs/adr/0004-schema-driven-ui.md),
@@ -74,11 +74,13 @@ will not get it:
   that I can put the first record in without a seed script.
 - As a user, I want `Enter` on a row to open that record with its stored values
   and no unsaved marker, so that I can tell editing from creating.
-- As a user, I want each field drawn as the kind of thing it is — a box for
+- As a user, I want each field drawn as the kind of thing it is — a line for
   text, a toggle for a boolean, a cycler for a select — so that I do not have
   to type JSON.
 - As a user, I want to see which field the keyboard is on, and whether the next
   key will type into it or move off it, so that I am never typing blind.
+- As a user moving between fields, I want nothing on the form to move but the
+  focus marker, so that the form does not jump under my eyes (Q16).
 - As a user, I want the message about a rejected field printed under that
   field, so that I can fix it without matching errors to inputs by hand.
 - As a user, I want `Ctrl+S` on a form with three empty required fields to
@@ -133,7 +135,7 @@ The main panel is 57x17 at 80x24 and 37x9 at the 60x16 minimum
   and which is asserted on cell styles instead.
 - **Stacked value.** The other five types draw their value on the next row,
   indented four.
-- **Values.** A field's value is the text `BeginEdit` would seed its box with:
+- **Values.** A field's value is the text `BeginEdit` would seed its buffer with:
   a `DateTime` as the stored RFC 3339 string, a `Json` field as its JSON text,
   a `Number` as the JSON number's own text. What is on screen is what you would
   be editing, which is why the form does not reuse `table::cell` (Q7). Two of
@@ -141,39 +143,46 @@ The main panel is 57x17 at 80x24 and 37x9 at the 60x16 minimum
   than format: an absent or null value is a dim `—`, and a value whose JSON
   type its field does not allow is its own JSON text, dim — the editor opens
   such a record rather than refusing to.
-- **Focus.** The focused field's value row is replaced by a box: a top rule on
-  the row after the label, the value, and a bottom rule. The box spans panel
-  columns 2 to 54 at 80x24 — two columns of indent, two of right gutter —
-  leaving 50 columns of text. A focused `Textarea` and `Json` box is five rows
-  tall; the other five are one (Q3b).
+- **Focus.** `▸` on the label row, and the value row drawn as a reverse-video
+  bar from panel column 2 to the two-column right gutter, its text at column 4
+  where every unfocused value sits — the table's selection, so focus reads the
+  same way in both screens. No border and no extra row: focusing a field
+  changes no block's height, so moving the focus moves nothing else on the
+  form (Q16). Text gets the panel's width less six: 51 columns at 80x24.
 - **Cursor.** `▌` after the last character, drawn **only** while an input
   context is active. A focused field in `Context::Editor` shows its `▸`, its
-  box and its value and no cursor, so the cursor means exactly one thing: the
+  bar and its value and no cursor, so the cursor means exactly one thing: the
   next printable key lands here (Q15).
-- **Overflow.** Text wider than a one-row box shows its tail, with `…` in the
-  box's first text column to say the head is cut — nothing is clipped silently
-  ([`tui.md`](../docs/tui.md) §6). A five-row box wraps instead (Q3c).
+- **Typing into a multi-line field.** A `Textarea` or `Json` field being typed
+  into grows to five rows of bar under its label, wrapped, so a paragraph or a
+  JSON document can be written; it is one row again when the field closes.
+  This is the one change of height on the form, and it follows a deliberate
+  `Enter`, never a move of the focus (Q16).
+- **Overflow.** Text being typed that is wider than its row shows its tail,
+  with `…` in the first text column to say the head is cut, so the cursor stays
+  in view; an unfocused or untyped value shows its head and ends in `…`.
+  Nothing is clipped silently ([`tui.md`](../docs/tui.md) §6). The five-row
+  bar wraps instead (Q3c).
 - **Error row.** A field named by a `FieldError` gains one row directly under
-  its value row or its box bottom: two spaces, `⚠ `, then the error's
+  its last value row: two spaces, `⚠ `, then the error's
   `message`, in red. One row per field; a field with two errors shows the first
   in the service's order.
 - **Block heights**, in rows, before the blank row that follows: `Select` and
-  `Boolean` 1; the other five unfocused 2; focused `Text`, `Number` and
-  `DateTime` 4; focused `Textarea` and `Json` 8; plus 1 when the field has an
-  error row.
+  `Boolean` 1; the other five 2, focused or not; a `Textarea` or `Json` field
+  being typed into 6; plus 1 when the field has an error row.
 - **Scrolling.** The form scrolls by whole **fields**, so the panel's top row
   is always a label row. The first visible field is the smallest index at which
   the focused field's block **and its trailing blank row** both fit in the
   panel — scroll the least that keeps the focused field whole (Q4). Blocks are
-  1 to 9 rows tall, so `view::window`, which assumes rows of one height, cannot
-  be reused. Including the blank row is what keeps a box's bottom rule off the
+  1 to 7 rows tall, so `view::window`, which assumes rows of one height, cannot
+  be reused. Including the blank row is what keeps the focused value off the
   last body row, where a scroll summary would otherwise overwrite it.
 - **Scroll summaries.** The first body row carries a dim `↑ n more` and the
   last a dim `↓ n more`, right-aligned with a two-column gutter, overlaid on
-  that row rather than replacing it (frames G, H). `n` counts the fields **no
-  row of which is drawn**: a block may be cut off at the bottom — frame B's
-  `Views` shows its label and not its value — which is why the summary counts
-  fields and not rows.
+  that row rather than replacing it (frames A, G). `n` counts the fields **no
+  row of which is drawn**: a block may be cut off at the bottom — frame A's
+  `Published at` shows its label and not its value — which is why the summary
+  counts fields and not rows.
 - **Header.** Three crumbs, the third naming the record: the draft's first
   `list_columns` value through `table::cell`, truncated to 20 characters with
   `…`. When that cell is the absent `—` the crumb is the record id shortened to
@@ -206,10 +215,8 @@ save can report it ([004](004-app-services.md), [000](000-m0-golden-path.md) Q2)
 ┌ pressa › Posts › New ────────────────────────────────────────────────────────┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
 │ Collections        │ ▸Title *                                                │
-│                    │  ┌───────────────────────────────────────────────────┐  │
-│ > Posts            │  │ —                                                 │  │
-│                    │  └───────────────────────────────────────────────────┘  │
-│                    │                                                         │
+│                    │    —                                                    │
+│ > Posts            │                                                         │
 │                    │  Slug *                                                 │
 │                    │    —                                                    │
 │                    │                                                         │
@@ -221,7 +228,9 @@ save can report it ([004](004-app-services.md), [000](000-m0-golden-path.md) Q2)
 │                    │  Views                                                  │
 │                    │    —                                                    │
 │                    │                                                         │
-│                    │  Featured        [ ]                          ↓ 2 more  │
+│                    │  Featured        [ ]                                    │
+│                    │                                                         │
+│                    │  Published at                                 ↓ 1 more  │
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -229,12 +238,12 @@ save can report it ([004](004-app-services.md), [000](000-m0-golden-path.md) Q2)
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-`Title` is focused — `▸` on its label row, a box round its value, and no
-cursor, because nothing is being typed yet. The box holds a dim `—` for the
-same reason the stacked fields do: the draft has no value there. `Status` and
-`Featured` are inline at the value column; the form is 24 rows and the body is
-17, so `Published at` and `Metadata` are off the bottom and the last row says
-so.
+`Title` is focused — `▸` on its label row, its value row a reverse-video bar
+(which a text snapshot cannot show), and no cursor, because nothing is being
+typed yet. The bar holds a dim `—` for the same reason the other fields do:
+the draft has no value there. `Status` and `Featured` are inline at the value
+column; the form is 18 rows and the body is 17, so `Published at` is cut off
+after its label, `Metadata` is off the bottom, and the last row says so.
 
 ### B — A save the service refused
 
@@ -245,10 +254,8 @@ field; the route does not change and the draft is untouched.
 ┌ pressa › Posts › New ────────────────────────────────────────────────────────┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
 │ Collections        │ ▸Title *                                                │
-│                    │  ┌───────────────────────────────────────────────────┐  │
-│ > Posts            │  │ —                                                 │  │
-│                    │  └───────────────────────────────────────────────────┘  │
-│                    │  ⚠ required                                             │
+│                    │    —                                                    │
+│ > Posts            │  ⚠ required                                             │
 │                    │                                                         │
 │                    │  Slug *                                                 │
 │                    │    —                                                    │
@@ -260,7 +267,9 @@ field; the route does not change and the draft is untouched.
 │                    │  Content                                                │
 │                    │    —                                                    │
 │                    │                                                         │
-│                    │  Views                                        ↓ 3 more  │
+│                    │  Views                                                  │
+│                    │    —                                                    │
+│                    │                                               ↓ 3 more  │
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │ 3 fields need attention                                                      │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -268,8 +277,8 @@ field; the route does not change and the draft is untouched.
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-`Views` is cut off after its label, and `↓ 3 more` counts the three fields no
-row of which is drawn. `3 fields need attention` is derived by `view` from
+Three error rows push `Views` to the last value row, and `↓ 3 more` counts the
+three fields no row of which is drawn. `3 fields need attention` is derived by `view` from
 `editor.errors`, not a `StatusMessage` (Q11).
 
 ### C — Typing into a field
@@ -281,10 +290,8 @@ appears, and the hint bar is the two keys that leave it.
 ┌ pressa › Posts › New ────────────────────────────────────────────────────────┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
 │ Collections        │ ▸Title *                                                │
-│                    │  ┌───────────────────────────────────────────────────┐  │
-│ > Posts            │  │ Hello▌                                            │  │
-│                    │  └───────────────────────────────────────────────────┘  │
-│                    │                                                         │
+│                    │    Hello▌                                               │
+│ > Posts            │                                                         │
 │                    │  Slug *                                                 │
 │                    │    —                                                    │
 │                    │                                                         │
@@ -296,7 +303,9 @@ appears, and the hint bar is the two keys that leave it.
 │                    │  Views                                                  │
 │                    │    —                                                    │
 │                    │                                                         │
-│                    │  Featured        [ ]                          ↓ 2 more  │
+│                    │  Featured        [ ]                                    │
+│                    │                                                         │
+│                    │  Published at                                 ↓ 1 more  │
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -330,11 +339,11 @@ filled in, the focus on `Views`.
 │                    │    —                                                    │
 │                    │                                                         │
 │                    │ ▸Views                                                  │
-│                    │  ┌───────────────────────────────────────────────────┐  │
-│                    │  │ 42                                                │  │
-│                    │  └───────────────────────────────────────────────────┘  │
+│                    │    42                                                   │
 │                    │                                                         │
-│                    │  Featured        [ ]                          ↓ 2 more  │
+│                    │  Featured        [ ]                                    │
+│                    │                                                         │
+│                    │  Published at                                 ↓ 1 more  │
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -342,11 +351,10 @@ filled in, the focus on `Views`.
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The header carries the unsaved marker and the renamed crumb. No scrolling: with
-`Title` unfocused its block is 3 rows rather than 5, so `Title` through `Views`
-is 16 of the 17 available and the least scroll is none. [000](000-m0-golden-path.md)
-drew this frame starting at `Status`, which no stated rule produces; it is
-regenerated.
+The header carries the unsaved marker and the renamed crumb. Every label is on
+the row it held in frame A: only `▸` and the bar moved, which is the point of
+Q16. [000](000-m0-golden-path.md) drew this frame starting at `Status`, which
+no stated rule produces; it is regenerated.
 
 ### E — Editing a stored record
 
@@ -357,10 +365,8 @@ regenerated.
 ┌ pressa › Posts › Hello world ────────────────────────────────────────────────┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
 │ Collections        │ ▸Title *                                                │
-│                    │  ┌───────────────────────────────────────────────────┐  │
-│ > Posts            │  │ Hello world                                       │  │
-│                    │  └───────────────────────────────────────────────────┘  │
-│                    │                                                         │
+│                    │    Hello world                                          │
+│ > Posts            │                                                         │
 │                    │  Slug *                                                 │
 │                    │    hello-world                                          │
 │                    │                                                         │
@@ -372,7 +378,9 @@ regenerated.
 │                    │  Views                                                  │
 │                    │    42                                                   │
 │                    │                                                         │
-│                    │  Featured        [ ]                          ↓ 2 more  │
+│                    │  Featured        [ ]                                    │
+│                    │                                                         │
+│                    │  Published at                                 ↓ 1 more  │
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -393,10 +401,8 @@ unchanged, and the form is still dirty because nothing was stored.
 ┌ pressa › Posts › Hello world ───────────────────────── ● unsaved · Ctrl+S ───┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
 │ Collections        │ ▸Title *                                                │
-│                    │  ┌───────────────────────────────────────────────────┐  │
-│ > Posts            │  │ Hello world                                       │  │
-│                    │  └───────────────────────────────────────────────────┘  │
-│                    │                                                         │
+│                    │    Hello world                                          │
+│ > Posts            │                                                         │
 │                    │  Slug *                                                 │
 │                    │    hello-world                                          │
 │                    │                                                         │
@@ -408,7 +414,9 @@ unchanged, and the form is still dirty because nothing was stored.
 │                    │  Views                                                  │
 │                    │    42                                                   │
 │                    │                                                         │
-│                    │  Featured        [ ]                          ↓ 2 more  │
+│                    │  Featured        [ ]                                    │
+│                    │                                                         │
+│                    │  Published at                                 ↓ 1 more  │
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │ ⚠ database error: disk I/O error                                             │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -434,14 +442,14 @@ field (Q3b).
 │                    │  Status *        ‹ published ›                          │
 │                    │                                                         │
 │                    │ ▸Content                                                │
-│                    │  ┌───────────────────────────────────────────────────┐  │
-│                    │  │ First line                                        │  │
-│                    │  │ second line▌                                      │  │
-│                    │  │                                                   │  │
-│                    │  │                                                   │  │
-│                    │  │                                                   │  │
-│                    │  └───────────────────────────────────────────────────┘  │
-│                    │                                               ↓ 4 more  │
+│                    │    First line                                           │
+│                    │    second line▌                                         │
+│                    │                                                         │
+│                    │                                                         │
+│                    │                                                         │
+│                    │                                                         │
+│                    │  Views                                                  │
+│                    │    42                                         ↓ 3 more  │
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -449,10 +457,9 @@ field (Q3b).
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Five rows, so a stored multi-line value and a long wrapped paragraph are both
-readable. A focused `Json` field is the same box with the same hint bar. The
-summary sits on `Content`'s trailing blank row, which is what the scroll rule
-guarantees is there.
+Five rows while it is typed into, so a multi-line value and a long wrapped
+paragraph are both readable; one row again once `Tab` commits it (Q16). A
+`Json` field being typed into is the same five rows with the same hint bar.
 
 ### H — All seven field types, in a collection that is not `posts`
 
@@ -464,10 +471,8 @@ different slug, rendered by the same function — the proof
 ┌ pressa › Entries › Release notes ────────────────────────────────────────────┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
 │ Collections        │ ▸Title *                                                │
-│                    │  ┌───────────────────────────────────────────────────┐  │
-│ > Entries          │  │ Release notes                                     │  │
-│                    │  └───────────────────────────────────────────────────┘  │
-│                    │                                                         │
+│                    │    Release notes                                        │
+│ > Entries          │                                                         │
 │                    │  Status *        ‹ published ›                          │
 │                    │                                                         │
 │                    │  Views                                                  │
@@ -479,7 +484,9 @@ different slug, rendered by the same function — the proof
 │                    │    2026-09-06T12:00:00Z                                 │
 │                    │                                                         │
 │                    │  Metadata                                               │
-│                    │    {"tags":["rust"],"pinned":true}            ↓ 1 more  │
+│                    │    {"pinned":true,"tags":["rust"]}                      │
+│                    │                                                         │
+│                    │  Notes                                                  │
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -489,7 +496,10 @@ different slug, rendered by the same function — the proof
 
 `Published at` reads as the stored RFC 3339 string and `Metadata` as its JSON
 text, because the form shows what you would edit rather than what the table
-shows (Q7). The value column is 18 here too: `Published at` is twelve
+shows (Q7). `Notes` is cut off after its label, and no field is drawn not at
+all, so there is no summary. `Metadata`'s keys are in sorted order:
+`serde_json` is built without `preserve_order` in this workspace, so a
+document's keys come back sorted, and the frame shows what the program prints. The value column is 18 here too: `Published at` is twelve
 characters, and twelve plus two is under the floor.
 
 ### I — `ConfirmDiscard`
@@ -502,10 +512,10 @@ returned.
 ┌ pressa › Posts › Hello, world! ─────────────────────── ● unsaved · Ctrl+S ───┐
 ├────────────────────┬─────────────────────────────────────────────────────────┤
 │ Collections        │ ▸Title *                                                │
-│                    │  ┌───────────────────────────────────────────────────┐  │
-│ > Posts            │  │ Hello, world!                                     │  │
-│                    │  └───────────────────────────────────────────────────┘  │
-│                    │                                                         │
+│                    │    Hello, world!                                        │
+│ > Posts            │                                                         │
+│                    │  Slug *                                                 │
+│                    │    hello-world                                          │
 │                    │       ┌─ Discard changes ──────────────────────┐        │
 │                    │       │                                        │        │
 │                    │       │  Discard unsaved changes?              │        │
@@ -513,11 +523,11 @@ returned.
 │                    │       │                                        │        │
 │                    │       │         y Discard    n Cancel          │        │
 │                    │       └────────────────────────────────────────┘        │
-│                    │                                                         │
-│                    │  Views                                                  │
 │                    │    42                                                   │
 │                    │                                                         │
-│                    │  Featured        [ ]                          ↓ 2 more  │
+│                    │  Featured        [ ]                                    │
+│                    │                                                         │
+│                    │  Published at                                 ↓ 1 more  │
 ├────────────────────┴─────────────────────────────────────────────────────────┤
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -535,14 +545,14 @@ the delete prompt it is shaped like.
 ┌ pressa › Posts › New ────────────────────────────────────┐
 ├────────────────────┬─────────────────────────────────────┤
 │ Collections        │ ▸Title *                            │
-│                    │  ┌───────────────────────────────┐  │
-│ > Posts            │  │ —                             │  │
-│                    │  └───────────────────────────────┘  │
-│                    │                                     │
+│                    │    —                                │
+│ > Posts            │                                     │
 │                    │  Slug *                             │
 │                    │    —                                │
 │                    │                                     │
-│                    │  Status *        ‹ — ›    ↓ 5 more  │
+│                    │  Status *        ‹ — ›              │
+│                    │                                     │
+│                    │  Content                  ↓ 4 more  │
 ├────────────────────┴─────────────────────────────────────┤
 │                                                          │
 ├──────────────────────────────────────────────────────────┤
@@ -550,9 +560,9 @@ the delete prompt it is shaped like.
 └──────────────────────────────────────────────────────────┘
 ```
 
-Nine body rows: `Title` boxed, `Slug`, `Status`, and five fields off the
-bottom. The box is 30 columns of text instead of 50, and the value column is
-still 18. Below 60x16 the shell draws "terminal too small" and no form at all
+Nine body rows: `Title` focused, `Slug`, `Status`, `Content` cut off after its
+label, and four fields off the bottom. A value gets 31 columns instead of 51,
+and the value column is still 18. Below 60x16 the shell draws "terminal too small" and no form at all
 ([SPEC-006](006-tui-shell.md) frame G).
 
 ### K — The list, once `n` and `Enter` are bound
@@ -763,8 +773,9 @@ pub fn parse(kind: &FieldType, text: &str) -> Result<Json, FieldError>;
 pub fn value_column(collection: &Collection) -> usize;
 
 /// How many rows one field's block occupies, so the scroll rule and the
-/// renderer cannot disagree about where a block ends.
-pub fn block_height(field: &Field, focused: bool, has_error: bool) -> usize;
+/// renderer cannot disagree about where a block ends. `typing` and not
+/// `focused`: focus never changes a height (Q16).
+pub fn block_height(field: &Field, typing: bool, has_error: bool) -> usize;
 
 /// The first field the panel draws: the least scroll that keeps the focused
 /// block and its trailing blank row whole. The form's own window —
@@ -894,7 +905,7 @@ settles in three rounds without the loop changing.
 | `NextField` on the last field, `PrevField` on the first | clamped, never wrapping, as the list and the sidebar are |
 | `NextOption` on a `Select` with the last option selected, or with no value | wraps to the first; `PrevOption` from no value selects the last. [000](000-m0-golden-path.md) step 7 presses `NextOption` twice from empty and expects `draft` then `published` |
 | `BeginEdit`, `ToggleBoolean`, `NextOption` or `PrevOption` on a field of the wrong type | nothing: a no-op rather than a panic. `BeginEdit` dispatches by type and has an arm for all seven; the other three check and return |
-| A value wider than its box | the tail, with `…` in the first text column (Q3c) |
+| A value being typed that is wider than its row | the tail, with `…` in the first text column (Q3c) |
 | A `Save` or a `Tab` while the overlay is open | nothing: `Context::ConfirmDiscard` binds `y`, `Enter`, `n`, `Esc` and `q`, and no other key resolves except the global `Ctrl+C` |
 | A terminal under 60x16 | "terminal too small"; no form, no overlay ([SPEC-006](006-tui-shell.md) frame G) |
 | A `Route::New` or `Edit` naming a collection the schema does not know | the Home body, as `Route::List` already does: a stale route is visible rather than fatal |
@@ -935,9 +946,12 @@ Form layout
 - [ ] The 80x24 snapshots match frames A, B, C, D, E, F, G, H and I, and the
       60x16 snapshot matches frame J.
 - [ ] `block_height` returns 1 for `Select` and `Boolean`, 2 for the other five
-      unfocused, 4 for a focused `Text`, `Number` and `DateTime`, 8 for a
-      focused `Textarea` and `Json`, and one more than each of those when the
-      field has an error row.
+      whether focused or not, 6 for a `Textarea` and `Json` being typed into,
+      and one more than each of those when the field has an error row.
+- [ ] Moving the focus moves no label: for every focus the form can reach
+      without scrolling, every label is drawn on the same row (Q16).
+- [ ] The focused value row is reverse video from the bar's margin to the
+      gutter, and an unfocused value row is not, asserted on cell styles.
 - [ ] `value_column` is the collection's longest `label` plus two, floored at
       18: 18 for `posts` and for the seven-type fixture, and greater than 18
       for a fixture with a 20-character label — and no inline widget is ever
@@ -948,20 +962,20 @@ Form layout
       unfocused one is not, asserted on the buffer's cell styles.
 - [ ] A required field's label ends in ` *` and an optional one's does not,
       asserted for both in one snapshot.
-- [ ] An error row sits directly under its field's value row or box bottom,
+- [ ] An error row sits directly under its field's last value row,
       carries the `FieldError`'s own `message`, and is red — asserted on cell
       styles.
 - [ ] A field with no `FieldError` has no error row, and three errors produce
       exactly three error rows (frame B).
 - [ ] `first_visible` returns the least scroll that keeps the focused block and
       its trailing blank row whole, for every focus from 0 to 7 at 17 rows and
-      at 9 rows; it returns 0 for frame D's state, and the last body row is
-      never a box rule when anything is hidden below.
+      at 9 rows, typing or not; it returns 0 for frame D's state, and the
+      focused value is never on the last body row.
 - [ ] The first body row carries `↑ n more` and the last `↓ n more`, dim,
       right-aligned with a two-column gutter and overlaid rather than
       replacing the row, and `n` counts the fields no row of which is drawn —
-      asserted against frames A (`↓ 2 more`), B (`↓ 3 more`, with `Views` cut
-      off after its label), G (`↓ 4 more`) and H (`↓ 1 more`).
+      asserted against frames A (`↓ 1 more`, with `Published at` cut off after
+      its label), B (`↓ 3 more`) and G (`↓ 3 more`).
 - [ ] A form shorter than the panel carries neither summary.
 - [ ] The header's right segment is ` ● unsaved · Ctrl+S ` when
       `draft != original` and absent when they are equal (frames D and E), and
@@ -978,8 +992,8 @@ The seven widgets
 
 - [ ] All seven field types render in one snapshot of a fixture collection with
       one field of each, six unfocused and one focused (frame H).
-- [ ] A focused `Textarea` and a focused `Json` render a five-row box, and the
-      other five a one-row box (frames G and A).
+- [ ] A `Textarea` and a `Json` field render five value rows while typed into
+      and one otherwise, and the other five always one (frames G and A).
 - [ ] `Boolean` renders `[x]` for `true` and `[ ]` for `false`, inline at the
       value column.
 - [ ] `Select` renders `‹ draft ›` for a value and `‹ — ›` for none, inline at
@@ -989,15 +1003,15 @@ The seven widgets
       its JSON text and not `{3}` — asserted against `table::cell` returning
       something different for the same inputs.
 - [ ] An absent or null value renders a dim `—` for every field type, including
-      inside a focused box, and no type renders it as an empty row.
+      on the focus bar, and no type renders it as an empty row.
 - [ ] A value whose JSON type the field does not allow renders as its own JSON
       text with `dim` set and does not panic — asserted for a number in a
       `Text` field and a string in a `Boolean` field.
 - [ ] `parse(kind, &editable(kind, value))` returns `value` again for every
       field type and every JSON value that type accepts.
-- [ ] A value wider than a one-row box draws its tail with `…` in the first
-      text column, counted in characters and not bytes, and never writes past
-      the box's right border.
+- [ ] A value being typed that is wider than its row draws its tail with `…`
+      in the first text column, counted in characters and not bytes, and never
+      writes into the right gutter.
 - [ ] The seven-type fixture's slug and field names differ from `posts`', and
       it is rendered by the same `form::render`.
 
@@ -1191,7 +1205,7 @@ Documents
       go when one can (Q12), and §8 records that `InvalidJson` and
       `InvalidDateTime` are produced by `form::parse`.
 - [ ] [000](000-m0-golden-path.md)'s frames C, D, E, G and I are regenerated
-      from this spec's rules — the box border, the three-space hint bar, the
+      from this spec's rules — the focus bar (Q16), the three-space hint bar, the
       `▸` marker, the cursor rule, the renamed crumbs and frame E's scroll —
       and its two [008](008-record-editor.md)-owned details, the editor's
       scroll markers and `‹ — ›`, match §UX. Its step-7 command sequence still
@@ -1265,7 +1279,8 @@ on 2026-10-03 and are folded in above.
   `Select` or `Boolean` widget. One marker, the same character the table uses
   for its selected row, so focus reads the same way in both screens; block
   heights are unchanged, which is why frames A–J keep their geometry.
-- **Q3b — the multi-line box, and `Enter`.** `Textarea` and `Json` keep their
+- **Q3b — the multi-line field, and `Enter`.** *(Its five-row box is replaced
+  by five rows shown only while typing — Q16.)* `Textarea` and `Json` keep their
   five-row box, and a newline is typed with `Enter` — which means the key that
   *commits* those two fields is `Tab`. Expressed as two input contexts,
   `EditorInput` and `EditorText`, derived from the focused field's type: a
@@ -1273,13 +1288,13 @@ on 2026-10-03 and are folded in above.
   own correct hint bar. No modifier key, and no dependence on the kitty
   keyboard protocol, which `Shift+Enter` would have needed and which the
   terminals most people use do not report.
-- **Q3c — overflow.** A one-row box shows the tail of its value with `…` in the
+- **Q3c — overflow.** *(Read "row" for "box" since Q16.)* A one-row box shows the tail of its value with `…` in the
   first text column; a five-row box wraps. Nothing is clipped silently
   ([`tui.md`](../docs/tui.md) §6), and `…` is the marker the table already
   uses.
 - **Q4 — the scroll rule.** Scroll by whole fields, the least that keeps the
   focused field's block *and its trailing blank row* whole. Including the blank
-  row is not cosmetic: it is what keeps a box's bottom rule off the last body
+  row is not cosmetic: it is what keeps the focused value off the last body
   row, where the `↓ n more` summary is drawn. Frame D is regenerated — it needs
   no scroll at all — because [000](000-m0-golden-path.md)'s `Status` start is
   not produced by this rule or by any other that was stated.
@@ -1346,7 +1361,22 @@ on 2026-10-03 and are folded in above.
   database, so a query would be work done to change nothing.
 - **Q15 — what marks input mode.** The cursor, and only the cursor. `▌` is
   drawn if and only if `editor.input` is `Some`, so a focused field in
-  `Context::Editor` shows its `▸`, its box and its value and nothing else. The
+  `Context::Editor` shows its `▸`, its bar and its value and nothing else. The
   cursor then means exactly one thing: the next printable key lands here.
   [000](000-m0-golden-path.md)'s frames C, E and G drew a cursor while
   explicitly in `Editor` mode and are corrected along with the box border.
+- **Q16 — focus without a border** (asked after implementation, decided by the
+  coordinator on 2026-10-03). The focused field's box made its block two rows
+  taller — six for `Textarea` and `Json` — so every `Tab` shrank one block and
+  grew another, and every field below the two moved. Focus is now `▸` on the
+  label and a reverse-video bar on the value row: the table's selection,
+  carried into the form, at no extra height, so moving the focus moves nothing
+  else. A `Textarea` or `Json` field still gets five rows while it is typed
+  into — writing a paragraph or a JSON document on one row is not editing — so
+  the one change of height left on the form follows a deliberate `Enter`,
+  never a move of the focus. Always five rows was rejected as eight rows of
+  form spent on two fields that are usually short; always one as unusable for
+  the two types that exist to hold more than a line. This supersedes Q3a's box
+  and Q3b's five-row box; frames A–J were retaken, and the rule of Q4 stands
+  for a new reason (the summary row, not a box rule).
+

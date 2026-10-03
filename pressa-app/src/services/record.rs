@@ -5,11 +5,11 @@
 //! [ADR-0003](../../../docs/adr/0003-json-documents-not-eav.md) depends on,
 //! since SQLite enforces no types of its own.
 
-use serde_json::{Map, Value as Json};
+use serde_json::Value as Json;
 
 use pressa_core::record::{Record, RecordId};
 use pressa_core::repository::{ListParams, RecordRepository, StorageError};
-use pressa_core::schema::{Collection, FieldType, Schema};
+use pressa_core::schema::{Collection, Schema, blank_document};
 use pressa_core::validation::{ErrorCode, FieldError, validate_record};
 
 use crate::error::AppError;
@@ -91,24 +91,12 @@ impl<R: RecordRepository> RecordService<R> {
 
     /// Field defaults for a new record, from the schema.
     ///
-    /// Every field key is present, so the editor never has to invent the shape
-    /// of a document. A required `Select` is left empty on purpose: pre-filling
-    /// a field the user never answered would let the blank form pass validation
-    /// (SPEC-004 "Behaviour").
+    /// Delegates to [`blank_document`], which is pure so the UI can call it
+    /// directly; the service keeps its signature so its API is unchanged and
+    /// the defaults are stated once (SPEC-008 Q2).
     pub fn blank(&self, collection: &str) -> Result<Json, AppError> {
         let collection = self.collection(collection)?;
-
-        let mut document = Map::new();
-        for field in &collection.fields {
-            // A boolean has no "unset": an unchecked box is `false`.
-            let value = if matches!(field.kind, FieldType::Boolean) {
-                Json::Bool(false)
-            } else {
-                Json::Null
-            };
-            document.insert(field.name.clone(), value);
-        }
-        Ok(Json::Object(document))
+        Ok(blank_document(collection))
     }
 
     /// Everything that must hold before a write, in SPEC-004's order.

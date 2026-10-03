@@ -14,6 +14,8 @@ use ratatui::widgets::Paragraph;
 
 use pressa_app::domain::{Collection, Field, FieldType, Json};
 
+use crate::tui::command::Command;
+use crate::tui::keymap::{Context, key_for};
 use crate::tui::state::{AppState, Load};
 use crate::tui::view::{truncate, window};
 
@@ -27,12 +29,14 @@ const HEADER_ROWS: u16 = 2;
 const CHROME_COLUMNS: u16 = 3;
 
 /// An absent value, a true boolean, a false one, and the selection marker.
-const ABSENT: &str = "—";
+pub const ABSENT: &str = "—";
 const YES: &str = "✓";
 const NO: &str = "·";
 const MARKER: &str = "▸";
 
-/// The two bodies that are not a table.
+/// The two bodies that are not a table. The empty one names the key that
+/// creates a record, read from the keymap, now that the key does something
+/// (SPEC-008 frame K).
 const EMPTY: &str = "No records yet.";
 const FAILED: &str = "Could not load records.  Press r to retry.";
 /// How far both of them are indented from the panel's left edge.
@@ -460,8 +464,11 @@ fn rule(frame: &mut Frame, area: Rect) {
 /// rather than centred in the panel (frames A and G).
 fn notice(frame: &mut Frame, area: Rect, load: Load) {
     let text = match load {
-        Load::Ok => EMPTY,
-        Load::Failed => FAILED,
+        // `map_or` keeps the first sentence alone should the key ever go.
+        Load::Ok => key_for(Context::List, &Command::NewRecord).map_or(EMPTY.to_string(), |key| {
+            format!("{EMPTY}  Press {key} to create the first one.")
+        }),
+        Load::Failed => FAILED.to_string(),
     };
     // Three rows in: the header, the rule, and the blank row under it.
     let top = area.y + HEADER_ROWS + 1;
@@ -469,7 +476,7 @@ fn notice(frame: &mut Frame, area: Rect, load: Load) {
     // the sentence can never write over the window's border.
     let room = area.width.saturating_sub(BODY_INDENT + 1) as usize;
 
-    for (offset, line) in notice_lines(text, room).iter().enumerate() {
+    for (offset, line) in notice_lines(&text, room).iter().enumerate() {
         // `as u16` is safe: a notice is at most two lines long.
         let y = top + offset as u16;
         if y >= area.bottom() {
@@ -699,9 +706,17 @@ mod tests {
     }
 
     #[test]
-    fn the_empty_notice_fits_every_supported_panel() {
-        // `No records yet.` never had to break; this is what says so.
-        assert_eq!(notice_lines(EMPTY, 33), vec![EMPTY.to_string()]);
+    fn the_empty_notice_breaks_between_its_sentences_at_the_minimum() {
+        // Two sentences since T9; 49 characters do not fit the 33 a 60-column
+        // terminal leaves, so the key moves to its own line rather than off it.
+        let text = format!("{EMPTY}  Press n to create the first one.");
+        assert_eq!(
+            notice_lines(&text, 33),
+            vec![
+                EMPTY.to_string(),
+                "Press n to create the first one.".to_string()
+            ]
+        );
     }
 
     // -----------------------------------------------------------------------

@@ -95,7 +95,7 @@ sandbox:
     | Directory | Holds | For |
     |---|---|---|
     | `empty/` | nothing | `init` from scratch |
-    | `blog/` | a copy of `examples/blog/pressa.yaml`, no records | `validate`, `dev`, the empty list, the log, `data.db` |
+    | `blog/` | a copy of `examples/blog/pressa.yaml`, no records | `validate`, `dev`, the empty list, the record editor, the log, `data.db` |
     | `posts/` | the same schema, wider `list_columns`, 20 records | the table: every cell renderer, scrolling, `g`/`G`, `r` |
     | `broken/` | a schema with `type: relation` | an error naming the YAML path |
     | `deep/` | `pressa.yaml` at the top, empty `a/b/c` | discovery walking up, the way git finds `.git` |
@@ -129,7 +129,8 @@ sandbox:
         │ Collections   │  TITLE           STATUS          VIEWS      │
         │               │ ──────────────────────────────────────────  │
         │ > Posts       │                                             │
-        │               │   No records yet.                           │
+        │               │   No records yet.  Press n to create the    │
+        │               │   first one.                                │
 
     `posts/` is the same schema with one line changed — `list_columns` widened
     to every field the table can draw — and twenty records in it:
@@ -170,9 +171,62 @@ sandbox:
     | `↓ 6 more` | records below the panel — scroll down to see them |
 
     Keys in the list: `j`/`k` or `↑`/`↓` move, `g`/`G` jump to the ends,
-    `Ctrl+D`/`Ctrl+U` move by ten, `r` reloads, and `Esc`/`h`/`←`/`q` goes
-    back. Only the first and last are in the hint bar; `?` lists the rest once
+    `Ctrl+D`/`Ctrl+U` move by ten, `r` reloads, `Enter` edits the selected
+    record, `n` creates one, and `Esc`/`h`/`←`/`q` goes back. The hint bar
+    shows `↑↓ Navigate   Enter Edit   n New   Esc Back`; `?` lists the rest once
     T11 builds the help overlay.
+
+    ## The record editor
+
+    T9 closes the loop: a record typed in `dev` is still there after a restart.
+
+        cd blog && ../pressa dev
+        # Enter on Posts, then n          a blank form, Title focused
+        # Ctrl+S                          refused: three "⚠ required", nothing saved
+        # Enter, type, Enter              Title; Tab moves to the next field
+        # Tab, Enter, type, Enter         Slug
+        # Tab, Enter, Enter               Status: — then draft then published
+        # Tab, Tab, Enter, 42, Enter      Views
+        # Ctrl+S                          "Record saved.", back at the list, one row
+        # q, q, ../pressa dev, Enter      the row is still there
+
+    The form is generated from `pressa.yaml` like the table is — one block per
+    field, in schema order:
+
+        ┌ pressa › Posts › Hello world ───────────────────────── ● unsaved · Ctrl+S ───┐
+        │ Collections        │  Title *                                                │
+        │                    │    Hello world                                          │
+        │ > Posts            │                                                         │
+        │                    │  Slug *                                                 │
+        │                    │    hello-world                                          │
+        │                    │                                                         │
+        │                    │  Status *        ‹ published ›                          │
+        │                    │                                                         │
+        │                    │  Content                                                │
+        │                    │    —                                                    │
+        │                    │                                                         │
+        │                    │ ▸Views                                                  │
+        │                    │    42                                                   │
+        │                    │                                                         │
+        │                    │  Featured        [ ]                                    │
+        │                    │                                                         │
+        │                    │  Published at                                 ↓ 1 more  │
+
+    | Thing | What it means |
+    |---|---|
+    | `▸` and the reversed bar | the focused field — moving it moves nothing else |
+    | `▌` in the box | you are typing; `Enter` keeps it, `Esc` throws it away |
+    | `*` | required: a save without it is refused |
+    | `‹ published ›` | a `select`; `Enter` or `l`/`h` cycles the options |
+    | `[ ]` / `[x]` | a `boolean`; `Enter` or `Space` toggles it |
+    | `● unsaved · Ctrl+S` | something was changed and not saved yet |
+    | `⚠ …` under a field | why the last save, or the last commit, was refused |
+    | `↓ 1 more` | fields below the panel — `Tab` scrolls to them |
+
+    `Textarea` and `json` fields open a five-row box: `Enter` is a newline
+    there, and `Tab` finishes the field. `Enter` on a row of the list opens that
+    record — `posts/` has twenty to try it on. `Esc` on a form with unsaved
+    changes asks `Discard unsaved changes?` first; `y` discards, `n` stays.
 
     ## Try changing the schema
 
