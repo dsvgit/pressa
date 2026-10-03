@@ -1,6 +1,6 @@
 # SPEC-008: Record editor
 
-Status: **Implemented** (amended 2026-10-03, Q16) · Task: T9 · Crates: `pressa-tui`, plus one pure function in
+Status: **Implemented** (amended 2026-10-03, Q16, Q17) · Task: T9 · Crates: `pressa-tui`, plus one pure function in
 `pressa-core` re-exported through `pressa-app` (Q2)
 · ADRs: [0002](../docs/adr/0002-synchronous-rusqlite.md),
 [0004](../docs/adr/0004-schema-driven-ui.md),
@@ -126,8 +126,9 @@ The main panel is 57x17 at 80x24 and 37x9 at the 60x16 minimum
   marker the table puts on its selected row — so focus reads the same way in
   both screens (Q3a).
 - **Inline value.** `Select` and `Boolean` draw their widget on the label row,
-  starting at the **value column**: the collection's longest field `label` plus
-  two, never less than 18. Derived from the schema alone, so inline widgets
+  starting at the **value column**: two columns of indent, the collection's
+  longest field `label` with its ` *`, and two of gap, never less than 18
+  (Q17). Derived from the schema alone, so inline widgets
   line up with each other and a long label pushes the column out rather than
   being clipped (Q9). `posts` comes out at 18. `Boolean` is `[x]` / `[ ]`;
   `Select` is `‹ value ›`, and `‹ — ›` when the field has no value. On the
@@ -880,7 +881,9 @@ settles in three rounds without the loop changing.
 - `errors` holds at most one entry per field. `SaveFailed` replaces the whole
   vector — one save reports one set of problems, not a growing list, the rule
   `OperationFailed` already follows for the status line — and a parse error
-  replaces the entry for its own field only.
+  replaces the entry for its own field only. Any write to a field's value
+  removes that field's entry, and `CancelEdit` removes the parse error its own
+  text caused (Q17).
 - No key is compared to a `KeyCode` outside `keymap.rs`; every hint string
   comes from `KEYMAP`.
 - No screen, widget or code path branches on a collection slug or a field name
@@ -895,7 +898,7 @@ settles in three rounds without the loop changing.
 | `Ctrl+S` on a clean draft loaded from storage | one `SaveRecord` all the same; an idempotent update is cheaper than a special case, and `updated_at` moving is correct |
 | `Esc` with `draft == original` | `Route::List` for the same collection, no overlay, no effect, no reload (Q14) |
 | `Esc` with `draft != original` | `Overlay::ConfirmDiscard { next: List }` and no effect; `Confirm` leaves and clears the editor, `Dismiss` closes the overlay and changes nothing else (frame I) |
-| `Esc` in an input context | `editor.input` is dropped; the draft was never written, so the field reads as it did |
+| `Esc` in an input context | `editor.input` is dropped; the draft was never written, so the field reads as it did, and a parse error that text caused is dropped with it (Q17) |
 | `CommitField` on text that will not parse for its type | the field stays in its input context with the text intact, and a `FieldError` for that field is put in `editor.errors` and drawn under it: `InvalidJson` / `not valid JSON`, `InvalidDateTime` / `must be a date like 2026-09-06T12:00:00Z`, `TypeMismatch` / `must be a number` ([002](002-record-validation.md)'s messages, unchanged). `Esc` is always available to abandon the field (Q6) |
 | A successful `CommitField` on a field that had a parse error | that field's error is removed; the others are left alone |
 | A draft value whose JSON type its field does not allow — a record the schema has since outgrown | drawn as its own JSON text, dim; the field opens and can be retyped (Q7) |
@@ -952,9 +955,9 @@ Form layout
       without scrolling, every label is drawn on the same row (Q16).
 - [ ] The focused value row is reverse video from the bar's margin to the
       gutter, and an unfocused value row is not, asserted on cell styles.
-- [ ] `value_column` is the collection's longest `label` plus two, floored at
-      18: 18 for `posts` and for the seven-type fixture, and greater than 18
-      for a fixture with a 20-character label — and no inline widget is ever
+- [ ] `value_column` is two, plus the collection's longest `label` with its
+      ` *`, plus two, floored at 18: 18 for `posts` and for the seven-type
+      fixture, and 26 for a fixture with a required 20-character label — and no inline widget is ever
       drawn over its own label.
 - [ ] The focused field's label row begins `▸` and no other label row does;
       moving the focus moves the marker (frames A and D).
@@ -1008,7 +1011,10 @@ The seven widgets
       text with `dim` set and does not panic — asserted for a number in a
       `Text` field and a string in a `Boolean` field.
 - [ ] `parse(kind, &editable(kind, value))` returns `value` again for every
-      field type and every JSON value that type accepts.
+      field type and every JSON value that type accepts, except an empty or
+      whitespace-only string, whose text reads as no value; `CommitField` on
+      such a field's unchanged text leaves the draft and the dirty state alone
+      (Q17).
 - [ ] A value being typed that is wider than its row draws its tail with `…`
       in the first text column, counted in characters and not bytes, and never
       writes into the right gutter.
@@ -1141,7 +1147,8 @@ Keymap and hints
       spaces, computed from `KEYMAP` in the test; no literal hint text appears
       in a renderer or a test.
 - [ ] Every visible hint still names a key that resolves to its own command,
-      and `?` still resolves to nothing in all seven contexts.
+      and `?` resolves to nothing in the five contexts that are not typed
+      into, and to `InputChar('?')` in `EditorInput` and `EditorText` (Q17).
 - [ ] Every `Command` variant the enum declares is reachable from at least one
       binding or one effect result — a scan over `KEYMAP` plus the three
       result commands, so a variant nobody can trigger cannot ship.
@@ -1330,7 +1337,8 @@ on 2026-10-03 and are folded in above.
   never less than 18. Derived from the schema alone, so it is snapshot-stable
   and blind to the data; inline widgets line up within a collection; and a
   label longer than sixteen characters pushes the column out rather than being
-  clipped. `posts` comes out at 18, so no frame moved.
+  clipped. `posts` comes out at 18, so no frame moved. The arithmetic is
+  restated in Q17.
 - **Q10 — the overlay's hints and wording.** One `Context` per overlay —
   `ConfirmDiscard` now, `ConfirmDelete` in T10 — so `y Discard` and
   `y Delete` each come from their own row and resolution stays a table lookup.
@@ -1379,4 +1387,27 @@ on 2026-10-03 and are folded in above.
   the two types that exist to hold more than a line. This supersedes Q3a's box
   and Q3b's five-row box; frames A–J were retaken, and the rule of Q4 stands
   for a new reason (the summary row, not a box rule).
-
+- **Q17 — review amendments** (found in review, decided by the coordinator on
+  2026-10-03). Five corrections that change no frame:
+  - *The value column.* "Longest label plus two" put a long label's widget
+    flush against it, and over its ` *` when required, against this spec's
+    own "no inline widget is ever drawn over its own label". The column is
+    two of indent, the longest label with its ` *`, and two of gap, floored at
+    18 — still 18 for `posts`, 26 for a required 20-character label.
+  - *`?` in a field.* "Nothing in all seven contexts" contradicted "`InputChar`
+    for every printable character": a title may end in a question mark. `?`
+    is text in the two input contexts and nothing in the other five.
+  - *Empty text.* `parse` reads empty or whitespace-only text as no value, so
+    the round trip cannot hold for a stored `""`. Rather than lose that rule,
+    `CommitField` on text still equal to what `BeginEdit` seeded writes
+    nothing, so `Enter`, `Enter` never turns `""` into `null` or the form
+    dirty.
+  - *Stale errors.* An error is about the value it was raised against. Any
+    write to a field — a commit, a toggle, an option cycled — removes that
+    field's entry, which is what frame D shows after step 6's refusal; and
+    `CancelEdit` removes the parse error its own text caused, since the draft
+    never held that text. A save's error stays through an `Esc`.
+  - *The attention line and the status line.* The attention line still takes
+    the status row when `errors` is non-empty. With the two rules above, a
+    field's entry outlives its cause only while that field is still wrong, so
+    a save that reaches the repository has none left to hide its `⚠`.

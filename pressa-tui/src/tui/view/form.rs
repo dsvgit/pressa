@@ -760,8 +760,8 @@ mod tests {
         ]);
         let column = value_column(&collection);
         assert!(column > 18, "column was {column}");
-        // Two of indent, the label, ` *`: the widget starts after all of it.
-        assert!(column > 2 + 20 + 2, "column was {column}");
+        // Two of indent, the label, ` *`, two of gap (SPEC-008 Q9).
+        assert_eq!(column, 2 + 20 + 2 + 2);
     }
 
     // -----------------------------------------------------------------------

@@ -137,6 +137,11 @@ fn scenario(schema: Schema, collection: &str) -> Vec<(Route, Json)> {
     );
     fill(&mut state, &service, "42");
     assert!(state.editor.is_dirty(), "the unsaved indicator is on");
+    assert!(
+        state.editor.errors.is_empty(),
+        "every refused field was filled, so no `⚠` is left: {:?}",
+        state.editor.errors
+    );
     mark(&state);
 
     // Step 8: saved, back at the list, reloaded.

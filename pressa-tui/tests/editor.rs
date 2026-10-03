@@ -418,6 +418,83 @@ fn cancel_edit_leaves_the_draft_exactly_as_it_was() {
 }
 
 #[test]
+fn cancel_edit_drops_the_parse_error_it_caused_and_keeps_a_saves() {
+    // A failed commit, then `Esc`: the text that failed is gone, so its
+    // message must not stay under a field whose value is fine.
+    let mut state = new_post();
+    state.editor.focus = 4; // views
+    fill(&mut state, "forty");
+    assert_eq!(state.editor.errors.len(), 1);
+    update(&mut state, Command::CancelEdit);
+    assert!(state.editor.errors.is_empty(), "{:?}", state.editor.errors);
+
+    // A save's `required` is about the draft, which `Esc` did not change.
+    update(&mut state, Command::SaveFailed(vec![required("title")]));
+    state.editor.focus = 0;
+    update(&mut state, Command::BeginEdit);
+    send(&mut state, &typed("abc"));
+    update(&mut state, Command::CancelEdit);
+    assert_eq!(state.editor.errors, vec![required("title")]);
+}
+
+#[test]
+fn an_unchanged_commit_leaves_a_stored_empty_string_alone() {
+    // Empty text reads as no value; committing it unchanged must not turn a
+    // stored `""` into `null` and the form dirty.
+    for content in [r#""""#, r#""  ""#] {
+        let document =
+            format!(r#"{{"title":"T","slug":"t","status":"draft","content":{content}}}"#);
+        let (mut state, record) = edit_post(&document);
+        state.editor.focus = 3; // content
+        update(&mut state, Command::BeginEdit);
+        update(&mut state, Command::CommitField);
+
+        assert_eq!(state.editor.input, None);
+        assert_eq!(state.editor.draft, record.data, "{content}");
+        assert!(!state.editor.is_dirty(), "{content}");
+    }
+
+    // Clearing a field that held text still clears it.
+    let (mut state, _) = edit_post(HELLO);
+    update(&mut state, Command::BeginEdit);
+    send(
+        &mut state,
+        &vec![Command::InputBackspace; "Hello world".len()],
+    );
+    update(&mut state, Command::CommitField);
+    assert_eq!(state.editor.draft["title"], Json::Null);
+}
+
+#[test]
+fn any_write_to_a_field_clears_the_error_under_it() {
+    // SPEC-000 steps 6 and 7: the refused save, then the four fields filled.
+    // `Status` is cycled rather than committed, and frame D shows no `⚠`.
+    let mut state = new_post();
+    update(
+        &mut state,
+        Command::SaveFailed(vec![
+            required("title"),
+            required("slug"),
+            required("status"),
+        ]),
+    );
+    step_seven(&mut state);
+    assert!(state.editor.errors.is_empty(), "{:?}", state.editor.errors);
+
+    // A toggle is a write as well.
+    let mut state = new_post();
+    let refused = FieldError {
+        field: "featured".to_string(),
+        code: ErrorCode::TypeMismatch,
+        message: "must be true or false".to_string(),
+    };
+    update(&mut state, Command::SaveFailed(vec![refused]));
+    state.editor.focus = 5; // featured
+    update(&mut state, Command::ToggleBoolean);
+    assert!(state.editor.errors.is_empty());
+}
+
+#[test]
 fn toggle_boolean_flips_one_key_and_touches_no_other() {
     let mut state = new_post();
     state.editor.focus = 5; // featured

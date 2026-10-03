@@ -275,6 +275,44 @@ fn the_repository_is_not_written_when_the_service_refuses() {
 }
 
 #[test]
+fn a_repository_that_fails_answers_with_its_own_message() {
+    // A real `StorageError` from a real adapter, which this crate cannot name
+    // (SPEC-008 "Non-goals"): a `unique` field whose name the loader would
+    // refuse. Validation passes — the key is in the schema — and the
+    // repository refuses to interpolate the name into its lookup.
+    let mut schema = example_schema();
+    let posts = schema.collections.get_mut("posts").expect("posts");
+    let slug = posts
+        .fields
+        .iter_mut()
+        .find(|field| field.unique)
+        .expect("posts has a unique field");
+    slug.name = "slug; --".to_string();
+    let service = RecordService::new(MemoryRepository::new(), schema);
+
+    let commands = run_effects(
+        &service,
+        vec![Effect::SaveRecord {
+            collection: "posts".to_string(),
+            id: None,
+            data: document(r#"{"title":"Hello","slug; --":"hello","status":"draft"}"#),
+        }],
+    );
+
+    assert_eq!(
+        commands,
+        vec![Command::OperationFailed(
+            "not a usable field name: slug; --".to_string()
+        )],
+        "a storage failure is not a validation failure"
+    );
+    assert_eq!(
+        service.count("posts", &Default::default()).expect("count"),
+        0
+    );
+}
+
+#[test]
 fn every_other_save_failure_answers_with_its_own_message() {
     let service = memory_service();
 

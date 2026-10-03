@@ -219,7 +219,7 @@ pub fn update(state: &mut AppState, cmd: Command) -> Vec<Effect> {
                 input.pop();
             }
         }
-        Command::CancelEdit => state.editor.input = None,
+        Command::CancelEdit => cancel(state),
         Command::CommitField => commit(state),
 
         Command::Save => {
@@ -337,9 +337,44 @@ fn focused(state: &AppState) -> Option<&Field> {
 
 /// Writes `value` under `field`'s key. Inserted when a stored record lacked
 /// it: the name comes from the schema, so no unknown key can appear.
+///
+/// The field's error goes with the value it was about: a `Select` cycled or a
+/// `Boolean` toggled after a refused save is no longer the value refused, so
+/// its `⚠` would be stale (frame D follows step 6's refusal with none).
 fn write(state: &mut AppState, field: &Field, value: Json) {
     if let Some(object) = state.editor.draft.as_object_mut() {
         object.insert(field.name.clone(), value);
+        drop_error(state, field);
+    }
+}
+
+/// Removes `field`'s entry from `errors`, if it has one.
+fn drop_error(state: &mut AppState, field: &Field) {
+    state
+        .editor
+        .errors
+        .retain(|error| error.field != field.name);
+}
+
+/// `CancelEdit`: the typed text is thrown away, and so is the parse error it
+/// caused — the draft never held that text, so nothing is wrong with it. Any
+/// other error, such as a save's `required`, is left under the field.
+fn cancel(state: &mut AppState) {
+    let (Some(field), Some(text)) = (focused(state).cloned(), state.editor.input.take()) else {
+        state.editor.input = None;
+        return;
+    };
+    // The error is the buffer's own when parsing the buffer produces it.
+    // `Err(refused)` binds the error `parse` returns, to compare it.
+    if let Err(refused) = parse(&field.kind, &text) {
+        let caused = state.editor.errors.iter().any(|error| {
+            error.field == field.name
+                && error.code == refused.code
+                && error.message == refused.message
+        });
+        if caused {
+            drop_error(state, &field);
+        }
     }
 }
 
@@ -387,11 +422,16 @@ fn commit(state: &mut AppState) {
         return;
     };
     // Whatever happens, this field's old error is superseded.
-    state
-        .editor
-        .errors
-        .retain(|error| error.field != field.name);
+    drop_error(state, &field);
     match parse(&field.kind, &text) {
+        // Empty text reads as no value, which would turn a stored `""` into
+        // `null` — and the form dirty — on an `Enter` that changed nothing.
+        // Text that is still what `BeginEdit` seeded leaves the draft alone.
+        Ok(Json::Null)
+            if editable(&field.kind, state.editor.draft.get(field.name.as_str())) == text =>
+        {
+            state.editor.input = None;
+        }
         Ok(value) => {
             write(state, &field, value);
             state.editor.input = None;

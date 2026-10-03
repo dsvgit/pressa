@@ -844,8 +844,14 @@ fn the_save_round_trip_settles_before_the_next_draw() {
         })
         .collect();
     assert_eq!(kinds, ["LoadRecords", "SaveRecord", "LoadRecords"]);
-    // One draw per key and none in between: five keys, five reads.
-    assert_eq!(draws.len(), 5, "a redraw happened mid-drain");
+    // One draw per key and none in between: five keys, five reads, and the
+    // terminal's own count of completed draws is the same five.
+    assert_eq!(draws.len(), 5, "one read per key");
+    assert_eq!(
+        terminal.get_frame().count(),
+        5,
+        "a redraw happened mid-drain"
+    );
     assert_eq!(state.list.records.len(), 1, "the reload reached the list");
     assert_eq!(
         state.status.as_ref().map(|status| status.kind),

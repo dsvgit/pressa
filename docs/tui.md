@@ -395,8 +395,8 @@ In brief:
 - one block per field in schema order, each followed by a blank row; a label
   row with ` *` on a required field and `▸` on the focused one;
 - `Select` (`‹ value ›`, `‹ — ›` when empty) and `Boolean` (`[x]` / `[ ]`)
-  inline at the value column — the longest label plus its ` *` and two, never
-  less than 18 — in reverse video when focused; the other five types stacked
+  inline at the value column — two of indent, the longest label with its ` *`,
+  and two of gap, never less than 18 — in reverse video when focused; the other five types stacked
   under their label, indented four;
 - values are the text you would edit: a `DateTime` as its RFC 3339 string, a
   `Json` field as its JSON text; an absent value is a dim `—`, a value of the
